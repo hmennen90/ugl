@@ -81,6 +81,14 @@ const zend_op *zend_jit_halt_op = NULL;
 const zend_op *zend_jit_interrupt_op = NULL;
 #ifdef HAVE_PTHREAD_JIT_WRITE_PROTECT_NP
 static int zend_write_protect = 1;
+
+/* Apple Silicon + ZTS: the JIT buffer is a private MAP_JIT mapping (MAP_JIT can not be
+ * combined with the MAP_SHARED opcache segment) and write access is switched per thread
+ * with pthread_jit_write_protect_np(). mprotect() would change all threads at once. */
+#if defined(ZTS) && defined(__APPLE__) && defined(__aarch64__) && defined(HAVE_PTHREAD_JIT_WRITE_PROTECT_NP)
+# define ZEND_JIT_APPLE_ZTS 1
+static bool zend_jit_buf_is_private = 0;
+#endif
 #endif
 
 static void *dasm_buf = NULL;
@@ -3518,7 +3526,11 @@ jit_failure:
 
 void zend_jit_unprotect(void)
 {
-#ifdef HAVE_MPROTECT
+#ifdef ZEND_JIT_APPLE_ZTS
+	if (zend_write_protect) {
+		pthread_jit_write_protect_np(0);
+	}
+#elif defined(HAVE_MPROTECT)
 	if (!(JIT_G(debug) & (ZEND_JIT_DEBUG_GDB|ZEND_JIT_DEBUG_PERF_DUMP))) {
 		int opts = PROT_READ | PROT_WRITE;
 #ifdef ZTS
@@ -3553,7 +3565,11 @@ void zend_jit_unprotect(void)
 
 void zend_jit_protect(void)
 {
-#ifdef HAVE_MPROTECT
+#ifdef ZEND_JIT_APPLE_ZTS
+	if (zend_write_protect) {
+		pthread_jit_write_protect_np(1);
+	}
+#elif defined(HAVE_MPROTECT)
 	if (!(JIT_G(debug) & (ZEND_JIT_DEBUG_GDB|ZEND_JIT_DEBUG_PERF_DUMP))) {
 #ifdef HAVE_PTHREAD_JIT_WRITE_PROTECT_NP
 		if (zend_write_protect) {
@@ -3785,11 +3801,28 @@ void zend_jit_startup(void *buf, size_t size, bool reattached)
 	zend_write_protect = pthread_jit_write_protect_supported_np();
 #endif
 
+#ifdef ZEND_JIT_APPLE_ZTS
+	if (zend_write_protect) {
+		void *jit_buf = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+			MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, -1, 0);
+		if (jit_buf == MAP_FAILED) {
+			zend_accel_error_noreturn(ACCEL_LOG_FATAL, "Could not enable JIT: mmap(MAP_JIT) failed: %s", strerror(errno));
+		}
+		buf = jit_buf;
+		zend_jit_buf_is_private = 1;
+		reattached = 0; /* a private buffer starts empty */
+	}
+#endif
+
 	dasm_buf = buf;
 	dasm_size = size;
 	dasm_ptr = dasm_end = (void*)(((char*)dasm_buf) + size - sizeof(*dasm_ptr) * 2);
 
-#ifdef HAVE_MPROTECT
+#ifdef ZEND_JIT_APPLE_ZTS
+	if (zend_write_protect) {
+		pthread_jit_write_protect_np(1);
+	}
+#elif defined(HAVE_MPROTECT)
 #ifdef HAVE_PTHREAD_JIT_WRITE_PROTECT_NP
 	if (zend_write_protect) {
 		pthread_jit_write_protect_np(1);
@@ -3878,6 +3911,12 @@ void zend_jit_shutdown(void)
 	/* Reset global pointers to prevent use-after-free in `zend_jit_status()`
 	 * after gracefully restarting Apache with mod_php, see:
 	 * https://github.com/php/php-src/pull/19212 */
+#ifdef ZEND_JIT_APPLE_ZTS
+	if (zend_jit_buf_is_private) {
+		munmap(dasm_buf, dasm_size);
+		zend_jit_buf_is_private = 0;
+	}
+#endif
 	dasm_ptr = NULL;
 	dasm_buf = NULL;
 	dasm_end = NULL;

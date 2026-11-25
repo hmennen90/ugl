@@ -29,6 +29,18 @@ Without `--enable-ugl` the same tree builds the base language unchanged, except 
 changes that are not switchable: the 64-bit `zend_type.type_mask` and the missing operand
 swap for `*` (see below). Such a build is only meant for running the unmodified test suites.
 
+### Thread-safe build (ZTS) and JIT on Apple Silicon
+
+`--enable-zts` works with UGL; the vector pool is per thread. On Apple Silicon the JIT is
+enabled in ZTS builds too (upstream turns it off, GH-13400): the JIT buffer is a private
+`MAP_JIT` mapping, and each thread switches write access with
+`pthread_jit_write_protect_np()` instead of `mprotect()`.
+
+Limit: this is for **one process with several threads** (CLI, embedding, FrankenPHP-style
+servers). The private buffer is not shared, so it must not be used by servers that fork
+workers and share the opcache segment (`op_array` handlers in shared memory would point into
+another process's JIT buffer). `benchmark/ugl/threads/` has a thread stress test.
+
 ## Source files
 
 UGL code lives in `.ugl` files. A `.ugl` file is code from the first byte: there is no opening tag

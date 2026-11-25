@@ -31,10 +31,8 @@ AS_VAR_IF([PHP_OPCACHE_JIT], [yes], [
       PHP_OPCACHE_JIT=no
     ])
 
-  if test "$host_vendor" = "apple" && test "$host_cpu" = "aarch64" && test "$PHP_THREAD_SAFETY" = "yes"; then
-    AC_MSG_WARN([JIT not supported on Apple Silicon with ZTS])
-    PHP_OPCACHE_JIT=no
-  fi
+dnl UGL: JIT works on Apple Silicon with ZTS. The JIT buffer is a private MAP_JIT mapping
+dnl and write access is switched per thread (see zend_jit_startup() in jit/zend_jit.c).
 ])
 
 AS_VAR_IF([PHP_OPCACHE_JIT], [yes], [
