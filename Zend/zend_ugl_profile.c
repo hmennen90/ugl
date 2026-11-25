@@ -17,6 +17,7 @@
 #include "zend_compile.h"
 #include "zend_ugl_vec.h"
 #include "zend_ugl_profile.h"
+#include "zend_language_parser.h"
 #include "zend_smart_str.h"
 
 #ifdef ZEND_UGL
@@ -168,7 +169,10 @@ static bool ugl_is_value_position(zend_ast_kind parent, uint32_t idx)
 		case ZEND_AST_SWITCH:
 			return idx == 1 || (parent == ZEND_AST_MATCH && idx == 0) || (parent == ZEND_AST_SWITCH && idx == 0);
 		case ZEND_AST_PARAM:
+		case ZEND_AST_ARROW_FUNC:
 			return idx == 2;
+		case ZEND_AST_STATIC:
+			return idx == 1;
 		default:
 			return false;
 	}
@@ -502,6 +506,7 @@ static void ugl_walk(ugl_ctx *c, zend_ast *ast, zend_ast_kind parent, uint32_t i
 		return;
 	}
 	if (zend_ast_is_list(ast)) {
+		/* attributes are metadata, not values */
 		if (ast->kind == ZEND_AST_ATTRIBUTE_LIST || ast->kind == ZEND_AST_ATTRIBUTE_GROUP
 		 || ast->kind == ZEND_AST_USE || ast->kind == ZEND_AST_NAME_LIST) {
 			return;
@@ -557,7 +562,8 @@ static void ugl_walk(ugl_ctx *c, zend_ast *ast, zend_ast_kind parent, uint32_t i
 		case ZEND_AST_STATIC_PROP:
 		case ZEND_AST_PROP:
 		case ZEND_AST_NULLSAFE_PROP:
-			if (ast->child[1] && ast->child[1]->kind != ZEND_AST_ZVAL) {
+			if (ast->child[1] && (ast->child[1]->kind != ZEND_AST_ZVAL
+			 || (ast->child[1]->attr & ZEND_UGL_AST_BRACED_NAME))) {
 				UGL_FAIL_IF(c, UGL_RULE_DYNAMIC, ast, "Dynamic property names are");
 			}
 			if (ast->kind == ZEND_AST_NULLSAFE_PROP) {
@@ -567,7 +573,8 @@ static void ugl_walk(ugl_ctx *c, zend_ast *ast, zend_ast_kind parent, uint32_t i
 		case ZEND_AST_METHOD_CALL:
 		case ZEND_AST_NULLSAFE_METHOD_CALL:
 		case ZEND_AST_STATIC_CALL:
-			if (ast->child[1] && ast->child[1]->kind != ZEND_AST_ZVAL) {
+			if (ast->child[1] && (ast->child[1]->kind != ZEND_AST_ZVAL
+			 || (ast->child[1]->attr & ZEND_UGL_AST_BRACED_NAME))) {
 				UGL_FAIL_IF(c, UGL_RULE_DYNAMIC, ast, "Dynamic method names are");
 			}
 			if (ast->kind == ZEND_AST_NULLSAFE_METHOD_CALL) {
@@ -613,6 +620,16 @@ static void ugl_walk(ugl_ctx *c, zend_ast *ast, zend_ast_kind parent, uint32_t i
 			break;
 		case ZEND_AST_PROP_GROUP:
 			ugl_check_type(c, ast->child[0]);
+			break;
+		case ZEND_AST_CAST:
+			if (ast->attr == IS_STRING) {
+				UGL_FAIL_IF(c, UGL_RULE_STRING, ast, "String casts and strings are");
+			}
+			break;
+		case ZEND_AST_MAGIC_CONST:
+			if (ast->attr != T_LINE) {
+				UGL_FAIL_IF(c, UGL_RULE_STRING, ast, "Magic constants such as __FILE__ and __CLASS__ (strings) are");
+			}
 			break;
 		case ZEND_AST_STATIC:
 			/* static $x = ...; keeps its name child out of the value positions */

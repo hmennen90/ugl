@@ -71,6 +71,16 @@ $cases = [
 	['common', 'namespace ok', 'namespace Game; function f(int $x): int { return $x + 1; } echo f(1);'],
 	['logic', 'logic unrestricted', '$a = \'x\'; $b = &$a; eval(\'1;\'); echo $a;'],
 	['common', 'string in attribute ok', '#[Attribute] final readonly class A { function __construct(public int $v = 0) {} } #[A(v: 1)] function f(): int { return 1; } echo f();'],
+	['common', 'braced prop name', 'final readonly class P { function __construct(public int $x = 1) {} } $p = new P; $v = $p->{\'x\'};'],
+	['common', 'braced method name', 'final readonly class P { function m(): int { return 1; } } $p = new P; $v = $p->{\'m\'}();'],
+	['common', 'plain prop name', 'final readonly class P { function __construct(public int $x = 1) {} } $p = new P; $v = $p->x;'],
+	['common', 'arrow fn string', '$f = fn() => \'x\';'],
+	['common', 'static string', 'function f() { static $s = \'x\'; }'],
+	['common', 'string cast', '$a = (string) 1;'],
+	['common', 'int cast', '$a = (int) 1.5;'],
+	['common', 'magic file', '$a = __FILE__;'],
+	['common', 'magic class', 'final readonly class P { function m() { return __CLASS__; } }'],
+	['common', 'magic line', '$a = __LINE__;'],
 ];
 // the declare statement itself
 $cases[] = ['logic', 'bad value', "declare(kind='bogus');"];
@@ -156,4 +166,14 @@ const ok [common]: ok
 namespace ok [common]: ok
 logic unrestricted [logic]: ok
 string in attribute ok [common]: ok
+braced prop name [common]: Dynamic property names are not allowed in code declared with kind='common' (line 2)
+braced method name [common]: Dynamic method names are not allowed in code declared with kind='common' (line 2)
+plain prop name [common]: ok
+arrow fn string [common]: String literals are not allowed in code declared with kind='common' (line 2)
+static string [common]: String literals are not allowed in code declared with kind='common' (line 2)
+string cast [common]: String casts and strings are not allowed in code declared with kind='common' (line 2)
+int cast [common]: ok
+magic file [common]: Magic constants such as __FILE__ and __CLASS__ (strings) are not allowed in code declared with kind='common' (line 2)
+magic class [common]: Magic constants such as __FILE__ and __CLASS__ (strings) are not allowed in code declared with kind='common' (line 2)
+magic line [common]: ok
 bad value [logic]: kind declaration must have one of the values 'logic', 'common', 'data' or 'shader' (line 2)

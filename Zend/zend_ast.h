@@ -185,6 +185,16 @@ enum _zend_ast_kind {
 typedef uint16_t zend_ast_kind;
 typedef uint16_t zend_ast_attr;
 
+/* UGL: a literal in $o->{'x'} or A::{'x'}(): written like a name, but a dynamic access. The
+ * attribute of a ZVAL node is otherwise only used for class names (ZEND_NAME_*). */
+#ifdef ZEND_UGL
+# define ZEND_UGL_AST_BRACED_NAME ((zend_ast_attr) 0x4000)
+# define ZEND_UGL_MARK_BRACED_NAME(ast) \
+	do { if ((ast)->kind == ZEND_AST_ZVAL) { (ast)->attr |= ZEND_UGL_AST_BRACED_NAME; } } while (0)
+#else
+# define ZEND_UGL_MARK_BRACED_NAME(ast) ((void) 0)
+#endif
+
 struct _zend_ast {
 	zend_ast_kind kind; /* Type of the node (ZEND_AST_* enum constant) */
 	zend_ast_attr attr; /* Additional attribute, use depending on node type */

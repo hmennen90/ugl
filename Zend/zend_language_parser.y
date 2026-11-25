@@ -1615,13 +1615,13 @@ new_variable:
 
 member_name:
 		identifier { $$ = $1; }
-	|	'{' expr '}'	{ $$ = $2; }
+	|	'{' expr '}'	{ $$ = $2; ZEND_UGL_MARK_BRACED_NAME($$); }
 	|	simple_variable	{ $$ = zend_ast_create(ZEND_AST_VAR, $1); }
 ;
 
 property_name:
 		T_STRING { $$ = $1; }
-	|	'{' expr '}'	{ $$ = $2; }
+	|	'{' expr '}'	{ $$ = $2; ZEND_UGL_MARK_BRACED_NAME($$); }
 	|	simple_variable	{ $$ = zend_ast_create(ZEND_AST_VAR, $1); }
 ;
 
