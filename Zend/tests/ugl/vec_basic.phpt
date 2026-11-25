@@ -166,11 +166,9 @@ int(5)
 int(2147483647)
 TypeError: Game\i32(): Argument #%d ($x) must be of type int32, int given, called in %s on line 39
 TypeError: Game\i32(): Argument #%d ($x) must be of type int32, int given, called in %s on line 39
-int(12)
-int(3)
-
-Deprecated: Implicit conversion from float 3.5 to int loses precision in %s on line 38
-int(3)
+TypeError: Game\i32(): Argument #%d ($x) must be of type int32, string given, called in %s on line 40
+TypeError: Game\i32(): Argument #%d ($x) must be of type int32, float given, called in %s on line 40
+TypeError: Game\i32(): Argument #%d ($x) must be of type int32, float given, called in %s on line 40
 TypeError: Game\i32(): Argument #%d ($x) must be of type int32, string given, called in %s on line 40
 TypeError: Game\i32(): Argument #%d ($x) must be of type int32, null given, called in %s on line 40
 int(7)

@@ -7072,6 +7072,12 @@ static void zend_compile_declare(zend_ast *ast) /* {{{ */
 				zend_error_noreturn(E_COMPILE_ERROR, "strict_types declaration must have 0 or 1 as its value");
 			}
 
+#ifdef ZEND_UGL
+			if (Z_LVAL(value_zv) == 0) {
+				zend_error_noreturn(E_COMPILE_ERROR, "strict_types=0 is not allowed: "
+					"UGL always compiles with strict types");
+			}
+#endif
 			if (Z_LVAL(value_zv) == 1) {
 				CG(active_op_array)->fn_flags |= ZEND_ACC_STRICT_TYPES;
 			}
@@ -11717,6 +11723,13 @@ void zend_compile_top_stmt(zend_ast *ast) /* {{{ */
 	if (!ast) {
 		return;
 	}
+
+#ifdef ZEND_UGL
+	/* The root of a file: strict types are always on, they cannot be switched off. */
+	if (ast == CG(ast) && CG(active_op_array)) {
+		CG(active_op_array)->fn_flags |= ZEND_ACC_STRICT_TYPES;
+	}
+#endif
 
 	if (ast->kind == ZEND_AST_STMT_LIST) {
 		zend_ast_list *list = zend_ast_get_list(ast);

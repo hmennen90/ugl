@@ -35,7 +35,7 @@ try { for ($j = 2147483640; $j < 2147483700; $j++) { $p->i = $j; } } catch (Type
 $ref = &$p->f; for ($j = 0; $j < 5; $j++) { $p->f = 0.1; } var_dump($ref);
 try { $ref = "x"; } catch (TypeError $e) { echo "ref TE\n"; }
 --EXPECTF--
-2fd664877f0674c1aee1761c67dedcef
+0d5a57e1d67be26d42f31da66eb9d65b
 
 float(3.25)
 float(0.10000000149011612)

@@ -31,7 +31,7 @@ for ($k = 0; $k < 3; $k++) { // run hot so the JIT compiles it
 --EXPECTF--
 float(0.10000000149011612)
 float(16777216)
-float(1.5)
+TypeError: p(): Argument #%d ($a) must be of type float32, string given, called in %s on line 9
 TypeError: p(): Argument #%d ($a) must be of type float32, string given, called in %s on line 10
 TypeError: p(): Argument #%d ($a) must be of type float32, null given, called in %s on line 11
 NULL
@@ -55,14 +55,12 @@ TE
 float(2147483648)
 TE
 float(-2147483648)
-
-Deprecated: Implicit conversion from float 0.1 to int loses precision in %s on line 23
-int(0)
+TE
 float(0.10000000149011612)
 int(16777217)
 int(16777217)
-int(7)
-int(7)
+TE
+TE
 TE
 NULL
 int(5)
@@ -73,14 +71,12 @@ TE
 float(2147483648)
 TE
 float(-2147483648)
-
-Deprecated: Implicit conversion from float 0.1 to int loses precision in %s on line 23
-int(0)
+TE
 float(0.10000000149011612)
 int(16777217)
 int(16777217)
-int(7)
-int(7)
+TE
+TE
 TE
 NULL
 int(5)
@@ -91,13 +87,11 @@ TE
 float(2147483648)
 TE
 float(-2147483648)
-
-Deprecated: Implicit conversion from float 0.1 to int loses precision in %s on line 23
-int(0)
+TE
 float(0.10000000149011612)
 int(16777217)
 int(16777217)
-int(7)
-int(7)
+TE
+TE
 TE
 NULL
