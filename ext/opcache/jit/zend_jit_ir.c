@@ -18,6 +18,7 @@
 
 #include "Zend/zend_types.h"
 #include "Zend/zend_type_info.h"
+#include "Zend/zend_ugl_vec.h"
 #include "jit/ir/ir.h"
 #include "jit/ir/ir_builder.h"
 #include "jit/tls/zend_jit_tls.h"
@@ -14380,6 +14381,37 @@ static int zend_jit_fetch_obj(zend_jit_ctx         *jit,
 	}
 
 	ZEND_ASSERT(obj_ref);
+#ifdef ZEND_UGL
+	/* $v->x, $v->y, $v->z on a vec2/vec3: load the float component directly. The class is
+	 * checked at run time, everything else continues with the generic code below. */
+	if (!prop_info && !on_this && opline->opcode == ZEND_FETCH_OBJ_R
+	 && Z_STRLEN_P(member) == 1 && Z_STRVAL_P(member)[0] >= 'x' && Z_STRVAL_P(member)[0] <= 'z') {
+		uint8_t idx = (uint8_t) (Z_STRVAL_P(member)[0] - 'x');
+		ir_ref cls = ir_LOAD_A(ir_ADD_OFFSET(obj_ref, offsetof(zend_object, ce)));
+
+		for (int k = 0; k < 2; k++) {
+			zend_class_entry *vec_ce = k == 0 ? zend_ce_ugl_vec3 : zend_ce_ugl_vec2;
+			if (k == 1 && idx > 1) {
+				break;
+			}
+			ir_ref if_vec = ir_IF(ir_EQ(cls, ir_CONST_ADDR(vec_ce)));
+			ir_IF_TRUE(if_vec);
+			ir_ref comp = ir_LOAD_F(ir_ADD_OFFSET(obj_ref, (uintptr_t) (ZEND_UGL_VEC_C_OFFSET + 4 * idx)));
+			if (Z_MODE(res_addr) == IS_REG) {
+				/* The register result is loaded from a zval address by the code below. */
+				zend_jit_addr real_addr = ZEND_ADDR_MEM_ZVAL(ZREG_FP, opline->result.var);
+				jit_set_Z_DVAL(jit, real_addr, ir_F2D(comp));
+				jit_set_Z_TYPE_INFO(jit, real_addr, IS_DOUBLE);
+				ir_END_PHI_list(end_values, jit_ZVAL_ADDR(jit, real_addr));
+			} else {
+				jit_set_Z_DVAL(jit, res_addr, ir_F2D(comp));
+				jit_set_Z_TYPE_INFO(jit, res_addr, IS_DOUBLE);
+				ir_END_list(end_inputs);
+			}
+			ir_IF_FALSE(if_vec);
+		}
+	}
+#endif
 	if (!prop_info && trace_ce && (trace_ce->ce_flags & ZEND_ACC_IMMUTABLE)) {
 		prop_info = zend_get_known_property_info(op_array, trace_ce, Z_STR_P(member), on_this, op_array->filename);
 		if (prop_info) {

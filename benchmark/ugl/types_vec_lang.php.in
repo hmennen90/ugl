@@ -56,6 +56,7 @@ if ($HAS) { $g['vec'] += [
  'core dot'         => function() use ($N) { $a = vec3(1,2,3); $b = vec3(.5,.25,2); for ($i=0;$i<$N;$i++) $c = $a->dot($b); },
  'core swizzle'     => function() use ($N) { $a = vec3(1,2,3); for ($i=0;$i<$N;$i++) $c = $a->zyx; },
  'core particle'    => function() use ($N) { $p = vec3(0,0,0); $v = vec3(1,2,3); for ($i=0;$i<$N;$i++) $p = $p + $v * 0.016; },
+ 'core particle +='  => function() use ($N) { $p = vec3(0,0,0); $v = vec3(1,2,3); for ($i=0;$i<$N;$i++) $p += $v * 0.016; },
  'core vec2 add'    => function() use ($N) { $a = vec2(1,2); $b = vec2(.5,.25); for ($i=0;$i<$N;$i++) $c = $a + $b; },
 ]; }
 $g['lang'] = [

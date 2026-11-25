@@ -20,6 +20,19 @@
 
 #ifdef ZEND_UGL
 
+/* vec2 and vec3: final, immutable value objects with float32 components. The layout is
+ * public because the JIT reads the components directly. */
+typedef struct _zend_ugl_vec {
+	float       c[3];
+	uint8_t     dim;
+	bool        initialized;
+	zend_object std;
+} zend_ugl_vec;
+
+/* Offset of c[0] relative to the zend_object pointer. */
+#define ZEND_UGL_VEC_C_OFFSET \
+	((intptr_t) XtOffsetOf(zend_ugl_vec, c) - (intptr_t) XtOffsetOf(zend_ugl_vec, std))
+
 BEGIN_EXTERN_C()
 
 extern ZEND_API zend_class_entry *zend_ce_ugl_vec2;
@@ -35,13 +48,31 @@ ZEND_API bool zend_is_ugl_class_name(const zend_string *name);
 /* VM fast path for + - * / with at least one vec2/vec3 operand. Returns false if the
  * operands are not supported (the generic path then reports the error). A temporary
  * operand (free1/free2) that nobody else references is reused for the result. */
-ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, bool free1, bool free2);
+#define ZEND_UGL_OP1_TMP    1  /* op1 is a TMP/VAR the caller releases after the opcode */
+#define ZEND_UGL_OP2_TMP    2  /* op2 is a TMP/VAR the caller releases after the opcode */
+#define ZEND_UGL_OP1_ASSIGN 4  /* op1 is a CV that the next opcode overwrites with the result */
+ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags);
 
 END_EXTERN_C()
 
+/* "$p = $p <op> x": the opcode after the arithmetic assigns its result to the variable
+ * that was the left operand, so that variable's old value is dead afterwards. */
+# define ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) \
+	((opline)->op1_type == IS_CV \
+	 && ((opline) + 1)->opcode == ZEND_ASSIGN \
+	 && ((opline) + 1)->op1_type == IS_CV \
+	 && ((opline) + 1)->op1.var == (opline)->op1.var \
+	 && ((opline) + 1)->op2_type == IS_TMP_VAR \
+	 && ((opline) + 1)->op2.var == (opline)->result.var)
+
 #else
 
-static zend_always_inline bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, bool free1, bool free2)
+# define ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) 0
+# define ZEND_UGL_OP1_TMP 1
+# define ZEND_UGL_OP2_TMP 2
+# define ZEND_UGL_OP1_ASSIGN 4
+
+static zend_always_inline bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags)
 {
 	return false;
 }

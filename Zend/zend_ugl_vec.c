@@ -25,13 +25,6 @@
  * Arithmetic is done in single precision (+ - * /, component-wise, scalars
  * broadcast), so results match what a GPU computes. */
 
-typedef struct _zend_ugl_vec {
-	float       c[3];
-	uint8_t     dim;
-	bool        initialized;
-	zend_object std;
-} zend_ugl_vec;
-
 ZEND_API zend_class_entry *zend_ce_ugl_vec2;
 ZEND_API zend_class_entry *zend_ce_ugl_vec3;
 static zend_object_handlers ugl_vec_handlers;
@@ -111,8 +104,10 @@ static zend_object *ugl_vec3_create(zend_class_entry *ce) { return ugl_vec_creat
 static void ugl_vec_new(zval *result, uint8_t dim, const float *c)
 {
 	zend_ugl_vec *v = ugl_vec_alloc(dim == 2 ? zend_ce_ugl_vec2 : zend_ce_ugl_vec3, dim);
-	for (uint8_t i = 0; i < dim; i++) {
-		v->c[i] = c[i];
+	v->c[0] = c[0];
+	v->c[1] = c[1];
+	if (dim == 3) {
+		v->c[2] = c[2];
 	}
 	v->initialized = true;
 	ZVAL_OBJ(result, &v->std);
@@ -120,58 +115,17 @@ static void ugl_vec_new(zval *result, uint8_t dim, const float *c)
 
 /* ---- operators ---- */
 
-static zend_result ugl_do_operation_ex(uint8_t opcode, zval *result, zval *op1, zval *op2)
+/* Evaluates "op1 <opcode> op2" for vectors and scalars in single precision.
+ * Returns false if the operands or the operator are not supported. */
+static zend_always_inline bool ugl_binop_eval(uint8_t opcode, zval *op1, zval *op2,
+		zend_ugl_vec **pa, zend_ugl_vec **pb, float *r, uint8_t *pdim)
 {
+	zend_ugl_vec *a = NULL, *b = NULL;
+	float sa = 0, sb = 0;
+
 	if (opcode != ZEND_ADD && opcode != ZEND_SUB && opcode != ZEND_MUL && opcode != ZEND_DIV) {
-		return FAILURE;
+		return false;
 	}
-
-	zend_ugl_vec *a = NULL, *b = NULL;
-	float sa = 0, sb = 0;
-
-	if (ugl_is_vec(op1)) {
-		a = ugl_vec_from_obj(Z_OBJ_P(op1));
-	} else if (Z_TYPE_P(op1) == IS_DOUBLE) {
-		sa = (float) Z_DVAL_P(op1);
-	} else if (Z_TYPE_P(op1) == IS_LONG) {
-		sa = (float) Z_LVAL_P(op1);
-	} else {
-		return FAILURE;
-	}
-	if (ugl_is_vec(op2)) {
-		b = ugl_vec_from_obj(Z_OBJ_P(op2));
-	} else if (Z_TYPE_P(op2) == IS_DOUBLE) {
-		sb = (float) Z_DVAL_P(op2);
-	} else if (Z_TYPE_P(op2) == IS_LONG) {
-		sb = (float) Z_LVAL_P(op2);
-	} else {
-		return FAILURE;
-	}
-	if (a && b && a->dim != b->dim) {
-		return FAILURE;
-	}
-
-	uint8_t dim = a ? a->dim : b->dim;
-	float r[3];
-	for (uint8_t i = 0; i < dim; i++) {
-		float x = a ? a->c[i] : sa;
-		float y = b ? b->c[i] : sb;
-		switch (opcode) {
-			case ZEND_ADD: r[i] = x + y; break;
-			case ZEND_SUB: r[i] = x - y; break;
-			case ZEND_MUL: r[i] = x * y; break;
-			default:       r[i] = x / y; break;
-		}
-	}
-	ugl_vec_new(result, dim, r);
-	return SUCCESS;
-}
-
-ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, bool free1, bool free2)
-{
-	zend_ugl_vec *a = NULL, *b = NULL;
-	float sa = 0, sb = 0;
-
 	if (ugl_is_vec(op1)) {
 		a = ugl_vec_from_obj(Z_OBJ_P(op1));
 	} else if (Z_TYPE_P(op1) == IS_DOUBLE) {
@@ -195,7 +149,6 @@ ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zv
 	}
 
 	uint8_t dim = a ? a->dim : b->dim;
-	float r[3];
 	for (uint8_t i = 0; i < dim; i++) {
 		float x = a ? a->c[i] : sa;
 		float y = b ? b->c[i] : sb;
@@ -206,32 +159,124 @@ ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zv
 			default:       r[i] = x / y; break;
 		}
 	}
+	*pa = a;
+	*pb = b;
+	*pdim = dim;
+	return true;
+}
 
-	/* A temporary that only this opcode references can hold the result. The result
-	 * slot must not alias an operand, the caller still releases both operands. */
+/* An object only this slot references can be overwritten instead of copied. A weak
+ * reference would otherwise observe the change. */
+static zend_always_inline bool ugl_can_overwrite(const zend_ugl_vec *v)
+{
+	return GC_REFCOUNT(&v->std) == 1 && !(GC_FLAGS(&v->std) & IS_OBJ_WEAKLY_REFERENCED);
+}
+
+/* Explicit stores: a loop over dim is turned into a memmove() call by the compiler. */
+static zend_always_inline void ugl_vec_store(zend_ugl_vec *v, const float *r)
+{
+	v->c[0] = r[0];
+	v->c[1] = r[1];
+	if (v->dim == 3) {
+		v->c[2] = r[2];
+	}
+}
+
+static zend_always_inline void ugl_vec_overwrite(zend_ugl_vec *v, const float *r)
+{
+	ugl_vec_store(v, r);
+}
+
+/* Hands a temporary nobody else references straight back to the pool. The caller's
+ * zval is cleared, so releasing it afterwards does nothing. */
+static zend_always_inline void ugl_vec_recycle(zval *zv)
+{
+#ifndef ZTS
+	zend_ugl_vec *v = ugl_vec_from_obj(Z_OBJ_P(zv));
+	if (ugl_vec_pool_count < UGL_VEC_POOL_MAX && ugl_can_overwrite(v) && !v->std.properties) {
+		GC_ADD_FLAGS(&v->std, IS_OBJ_DESTRUCTOR_CALLED);
+		ugl_vec_pool[ugl_vec_pool_count++] = v;
+		ZVAL_UNDEF(zv);
+	}
+#endif
+}
+
+ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags)
+{
+	zend_ugl_vec *a, *b;
+	float r[3];
+	uint8_t dim;
+
+	if (!ugl_binop_eval(opcode, op1, op2, &a, &b, r, &dim)) {
+		return false;
+	}
+
+	/* A temporary that only this opcode references (or the variable the next opcode
+	 * assigns the result to) can hold the result. The result slot must not alias an
+	 * operand, the caller still releases both operands. */
 	zend_ugl_vec *reuse = NULL;
 	if (result != op1 && result != op2) {
-		if (free1 && a && GC_REFCOUNT(&a->std) == 1) {
+		if ((flags & (ZEND_UGL_OP1_TMP|ZEND_UGL_OP1_ASSIGN)) && a && ugl_can_overwrite(a)) {
 			reuse = a;
-		} else if (free2 && b && GC_REFCOUNT(&b->std) == 1) {
+		} else if ((flags & ZEND_UGL_OP2_TMP) && b && ugl_can_overwrite(b)) {
 			reuse = b;
 		}
 	}
 	if (reuse) {
-		for (uint8_t i = 0; i < dim; i++) {
-			reuse->c[i] = r[i];
-		}
+		ugl_vec_overwrite(reuse, r);
 		ZVAL_OBJ_COPY(result, &reuse->std);
-	} else {
-		ugl_vec_new(result, dim, r);
+		/* The other operand may be a temporary as well. */
+		if (reuse == a) {
+			if ((flags & ZEND_UGL_OP2_TMP) && b) {
+				ugl_vec_recycle(op2);
+			}
+		} else if ((flags & ZEND_UGL_OP1_TMP) && a) {
+			ugl_vec_recycle(op1);
+		}
+		return true;
 	}
+	if (result != op1 && result != op2) {
+		if ((flags & ZEND_UGL_OP1_TMP) && a) {
+			ugl_vec_recycle(op1);
+		}
+		if ((flags & ZEND_UGL_OP2_TMP) && b) {
+			ugl_vec_recycle(op2);
+		}
+	}
+	ugl_vec_new(result, dim, r);
 	return true;
+}
+
+static zend_result ugl_do_operation_ex(uint8_t opcode, zval *result, zval *op1, zval *op2)
+{
+	zend_ugl_vec *a, *b;
+	float r[3];
+	uint8_t dim;
+
+	if (!ugl_binop_eval(opcode, op1, op2, &a, &b, r, &dim)) {
+		return FAILURE;
+	}
+	ugl_vec_new(result, dim, r);
+	return SUCCESS;
 }
 
 static zend_result ugl_do_operation(uint8_t opcode, zval *result, zval *op1, zval *op2)
 {
 	zval op1_copy;
 	zend_result status;
+
+	if (result == op1 && ugl_is_vec(op1)) {
+		/* $p += ... on a vector nobody else holds: update it in place. */
+		zend_ugl_vec *a, *b;
+		float r[3];
+		uint8_t dim;
+
+		if (ugl_can_overwrite(ugl_vec_from_obj(Z_OBJ_P(op1)))
+		 && ugl_binop_eval(opcode, op1, op2, &a, &b, r, &dim)) {
+			ugl_vec_overwrite(a, r);
+			return SUCCESS;
+		}
+	}
 
 	if (result == op1) {
 		ZVAL_COPY_VALUE(&op1_copy, op1);
