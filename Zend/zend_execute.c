@@ -26,6 +26,7 @@
 #include "zend.h"
 #include "zend_compile.h"
 #include "zend_execute.h"
+#include "zend_ugl_vec.h"
 #include "zend_API.h"
 #include "zend_ptr_stack.h"
 #include "zend_constants.h"

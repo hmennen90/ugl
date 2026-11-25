@@ -467,7 +467,13 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 	if (UNEXPECTED(Z_TYPE_INFO_P(op_2) == IS_UNDEF)) {
 		op_2 = ZVAL_UNDEFINED_OP2();
 	}
-	add_function(EX_VAR(opline->result.var), op_1, op_2);
+	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_ADD, EX_VAR(opline->result.var), op_1, op_2,
+			(opline->op1_type & (IS_TMP_VAR|IS_VAR)) != 0, (opline->op2_type & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		add_function(EX_VAR(opline->result.var), op_1, op_2);
+	}
 	if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
 		zval_ptr_dtor_nogc(op_1);
 	}
@@ -488,7 +494,13 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 	if (UNEXPECTED(Z_TYPE_INFO_P(op_2) == IS_UNDEF)) {
 		op_2 = ZVAL_UNDEFINED_OP2();
 	}
-	sub_function(EX_VAR(opline->result.var), op_1, op_2);
+	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_SUB, EX_VAR(opline->result.var), op_1, op_2,
+			(opline->op1_type & (IS_TMP_VAR|IS_VAR)) != 0, (opline->op2_type & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		sub_function(EX_VAR(opline->result.var), op_1, op_2);
+	}
 	if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
 		zval_ptr_dtor_nogc(op_1);
 	}
@@ -509,7 +521,13 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 	if (UNEXPECTED(Z_TYPE_INFO_P(op_2) == IS_UNDEF)) {
 		op_2 = ZVAL_UNDEFINED_OP2();
 	}
-	mul_function(EX_VAR(opline->result.var), op_1, op_2);
+	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_MUL, EX_VAR(opline->result.var), op_1, op_2,
+			(opline->op1_type & (IS_TMP_VAR|IS_VAR)) != 0, (opline->op2_type & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		mul_function(EX_VAR(opline->result.var), op_1, op_2);
+	}
 	if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
 		zval_ptr_dtor_nogc(op_1);
 	}
@@ -6361,7 +6379,13 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 	SAVE_OPLINE();
 	op1 = RT_CONSTANT(opline, opline->op1);
 	op2 = RT_CONSTANT(opline, opline->op2);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -9384,7 +9408,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CONS
 	SAVE_OPLINE();
 	op1 = RT_CONSTANT(opline, opline->op1);
 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0, ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
@@ -11954,7 +11984,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CONS
 	SAVE_OPLINE();
 	op1 = RT_CONSTANT(opline, opline->op1);
 	op2 = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CV & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -16195,7 +16231,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_TMPV
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 	op2 = RT_CONSTANT(opline, opline->op2);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 
 
@@ -17710,7 +17752,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_TMPV
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0, ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
@@ -19483,7 +19531,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_TMPV
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CV & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 
 
@@ -43078,7 +43132,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CV_C
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_cv_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 	op2 = RT_CONSTANT(opline, opline->op2);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CV & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -47211,7 +47271,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CV_T
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_cv_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CV & (IS_TMP_VAR|IS_VAR)) != 0, ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
@@ -52841,7 +52907,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CV_C
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_cv_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CV & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CV & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -62074,7 +62146,13 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_S
 	SAVE_OPLINE();
 	op1 = RT_CONSTANT(opline, opline->op1);
 	op2 = RT_CONSTANT(opline, opline->op2);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -65097,7 +65175,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CONST_TMP
 	SAVE_OPLINE();
 	op1 = RT_CONSTANT(opline, opline->op1);
 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0, ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
@@ -67565,7 +67649,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CONST_CV_
 	SAVE_OPLINE();
 	op1 = RT_CONSTANT(opline, opline->op1);
 	op2 = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CV & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -71806,7 +71896,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_TMPVAR_CO
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 	op2 = RT_CONSTANT(opline, opline->op2);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 
 
@@ -73321,7 +73417,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_TMPVAR_TM
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0, ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
@@ -74994,7 +75096,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_TMPVAR_CV
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CV & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 	zval_ptr_dtor_nogc(EX_VAR(opline->op1.var));
 
 
@@ -98589,7 +98697,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CV_CONST_
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_cv_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 	op2 = RT_CONSTANT(opline, opline->op2);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CV & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CONST & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -102722,7 +102836,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CV_TMPVAR
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_cv_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CV & (IS_TMP_VAR|IS_VAR)) != 0, ((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 	zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
@@ -108250,7 +108370,13 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CV_CV_TAI
 	SAVE_OPLINE();
 	op1 = _get_zval_ptr_cv_BP_VAR_R(opline->op1.var EXECUTE_DATA_CC);
 	op2 = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
-	div_function(EX_VAR(opline->result.var), op1, op2);
+	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
+			(IS_CV & (IS_TMP_VAR|IS_VAR)) != 0, (IS_CV & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		div_function(EX_VAR(opline->result.var), op1, op2);
+	}
 
 
 
@@ -111978,7 +112104,13 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 	if (UNEXPECTED(Z_TYPE_INFO_P(op_2) == IS_UNDEF)) {
 		op_2 = ZVAL_UNDEFINED_OP2();
 	}
-	add_function(EX_VAR(opline->result.var), op_1, op_2);
+	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_ADD, EX_VAR(opline->result.var), op_1, op_2,
+			(opline->op1_type & (IS_TMP_VAR|IS_VAR)) != 0, (opline->op2_type & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		add_function(EX_VAR(opline->result.var), op_1, op_2);
+	}
 	if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
 		zval_ptr_dtor_nogc(op_1);
 	}
@@ -111999,7 +112131,13 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 	if (UNEXPECTED(Z_TYPE_INFO_P(op_2) == IS_UNDEF)) {
 		op_2 = ZVAL_UNDEFINED_OP2();
 	}
-	sub_function(EX_VAR(opline->result.var), op_1, op_2);
+	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_SUB, EX_VAR(opline->result.var), op_1, op_2,
+			(opline->op1_type & (IS_TMP_VAR|IS_VAR)) != 0, (opline->op2_type & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		sub_function(EX_VAR(opline->result.var), op_1, op_2);
+	}
 	if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
 		zval_ptr_dtor_nogc(op_1);
 	}
@@ -112020,7 +112158,13 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 	if (UNEXPECTED(Z_TYPE_INFO_P(op_2) == IS_UNDEF)) {
 		op_2 = ZVAL_UNDEFINED_OP2();
 	}
-	mul_function(EX_VAR(opline->result.var), op_1, op_2);
+	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
+	 && zend_ugl_vec_binary_op(ZEND_MUL, EX_VAR(opline->result.var), op_1, op_2,
+			(opline->op1_type & (IS_TMP_VAR|IS_VAR)) != 0, (opline->op2_type & (IS_TMP_VAR|IS_VAR)) != 0)) {
+		/* handled by the UGL vector fast path */
+	} else {
+		mul_function(EX_VAR(opline->result.var), op_1, op_2);
+	}
 	if (opline->op1_type & (IS_TMP_VAR|IS_VAR)) {
 		zval_ptr_dtor_nogc(op_1);
 	}

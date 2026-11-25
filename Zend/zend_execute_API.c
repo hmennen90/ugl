@@ -24,6 +24,7 @@
 #include "zend.h"
 #include "zend_compile.h"
 #include "zend_execute.h"
+#include "zend_ugl_vec.h"
 #include "zend_API.h"
 #include "zend_stack.h"
 #include "zend_constants.h"
@@ -128,6 +129,9 @@ static int clean_non_persistent_class_full(zval *zv) /* {{{ */
 void init_executor(void) /* {{{ */
 {
 	zend_init_fpu();
+#ifdef ZEND_UGL
+	zend_ugl_vec_request_init();
+#endif
 
 	ZVAL_NULL(&EG(uninitialized_zval));
 	ZVAL_ERROR(&EG(error_zval));

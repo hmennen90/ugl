@@ -46,13 +46,63 @@ static zend_always_inline bool ugl_is_vec(const zval *zv)
 	return Z_TYPE_P(zv) == IS_OBJECT && Z_OBJ_P(zv)->handlers == &ugl_vec_handlers;
 }
 
-static zend_object *ugl_vec_create_ex(zend_class_entry *ce, uint8_t dim)
+/* Vectors carry no references, so they can never be part of a cycle. */
+#define UGL_VEC_GC_TYPE_INFO (GC_OBJECT | (GC_NOT_COLLECTABLE << GC_FLAGS_SHIFT))
+
+/* Recycling pool. When the last reference goes away, zend_objects_store_del() calls
+ * dtor_obj with the refcount raised to 1. Taking one more reference there keeps the
+ * object (and its handle) alive, so it can be handed out again without emalloc,
+ * the object store and zend_object_std_init(). Not used with ZTS. */
+#ifndef ZTS
+# define UGL_VEC_POOL_MAX 1024
+static zend_ugl_vec *ugl_vec_pool[UGL_VEC_POOL_MAX];
+static uint32_t ugl_vec_pool_count;
+#endif
+
+void zend_ugl_vec_request_init(void)
 {
-	zend_ugl_vec *v = zend_object_alloc(sizeof(zend_ugl_vec), ce);
+#ifndef ZTS
+	/* The objects themselves were freed with the previous request's object store. */
+	ugl_vec_pool_count = 0;
+#endif
+}
+
+static void ugl_vec_dtor_obj(zend_object *obj)
+{
+#ifndef ZTS
+	if (ugl_vec_pool_count < UGL_VEC_POOL_MAX
+	 && !(GC_FLAGS(obj) & IS_OBJ_WEAKLY_REFERENCED)
+	 && !obj->properties) {
+		ugl_vec_pool[ugl_vec_pool_count++] = ugl_vec_from_obj(obj);
+		GC_ADDREF(obj);
+	}
+#endif
+}
+
+static zend_always_inline zend_ugl_vec *ugl_vec_alloc(zend_class_entry *ce, uint8_t dim)
+{
+	zend_ugl_vec *v;
+#ifndef ZTS
+	if (ugl_vec_pool_count) {
+		v = ugl_vec_pool[--ugl_vec_pool_count];
+		GC_TYPE_INFO(&v->std) = UGL_VEC_GC_TYPE_INFO;
+		v->std.ce = ce;
+		v->dim = dim;
+		v->initialized = false;
+		return v;
+	}
+#endif
+	v = zend_object_alloc(sizeof(zend_ugl_vec), ce);
 	v->dim = dim;
 	zend_object_std_init(&v->std, ce);
+	GC_TYPE_INFO(&v->std) = UGL_VEC_GC_TYPE_INFO;
 	v->std.handlers = &ugl_vec_handlers;
-	return &v->std;
+	return v;
+}
+
+static zend_object *ugl_vec_create_ex(zend_class_entry *ce, uint8_t dim)
+{
+	return &ugl_vec_alloc(ce, dim)->std;
 }
 
 static zend_object *ugl_vec2_create(zend_class_entry *ce) { return ugl_vec_create_ex(ce, 2); }
@@ -60,13 +110,12 @@ static zend_object *ugl_vec3_create(zend_class_entry *ce) { return ugl_vec_creat
 
 static void ugl_vec_new(zval *result, uint8_t dim, const float *c)
 {
-	zend_object *obj = ugl_vec_create_ex(dim == 2 ? zend_ce_ugl_vec2 : zend_ce_ugl_vec3, dim);
-	zend_ugl_vec *v = ugl_vec_from_obj(obj);
+	zend_ugl_vec *v = ugl_vec_alloc(dim == 2 ? zend_ce_ugl_vec2 : zend_ce_ugl_vec3, dim);
 	for (uint8_t i = 0; i < dim; i++) {
 		v->c[i] = c[i];
 	}
 	v->initialized = true;
-	ZVAL_OBJ(result, obj);
+	ZVAL_OBJ(result, &v->std);
 }
 
 /* ---- operators ---- */
@@ -116,6 +165,67 @@ static zend_result ugl_do_operation_ex(uint8_t opcode, zval *result, zval *op1, 
 	}
 	ugl_vec_new(result, dim, r);
 	return SUCCESS;
+}
+
+ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, bool free1, bool free2)
+{
+	zend_ugl_vec *a = NULL, *b = NULL;
+	float sa = 0, sb = 0;
+
+	if (ugl_is_vec(op1)) {
+		a = ugl_vec_from_obj(Z_OBJ_P(op1));
+	} else if (Z_TYPE_P(op1) == IS_DOUBLE) {
+		sa = (float) Z_DVAL_P(op1);
+	} else if (Z_TYPE_P(op1) == IS_LONG) {
+		sa = (float) Z_LVAL_P(op1);
+	} else {
+		return false;
+	}
+	if (ugl_is_vec(op2)) {
+		b = ugl_vec_from_obj(Z_OBJ_P(op2));
+	} else if (Z_TYPE_P(op2) == IS_DOUBLE) {
+		sb = (float) Z_DVAL_P(op2);
+	} else if (Z_TYPE_P(op2) == IS_LONG) {
+		sb = (float) Z_LVAL_P(op2);
+	} else {
+		return false;
+	}
+	if ((!a && !b) || (a && b && a->dim != b->dim)) {
+		return false;
+	}
+
+	uint8_t dim = a ? a->dim : b->dim;
+	float r[3];
+	for (uint8_t i = 0; i < dim; i++) {
+		float x = a ? a->c[i] : sa;
+		float y = b ? b->c[i] : sb;
+		switch (opcode) {
+			case ZEND_ADD: r[i] = x + y; break;
+			case ZEND_SUB: r[i] = x - y; break;
+			case ZEND_MUL: r[i] = x * y; break;
+			default:       r[i] = x / y; break;
+		}
+	}
+
+	/* A temporary that only this opcode references can hold the result. The result
+	 * slot must not alias an operand, the caller still releases both operands. */
+	zend_ugl_vec *reuse = NULL;
+	if (result != op1 && result != op2) {
+		if (free1 && a && GC_REFCOUNT(&a->std) == 1) {
+			reuse = a;
+		} else if (free2 && b && GC_REFCOUNT(&b->std) == 1) {
+			reuse = b;
+		}
+	}
+	if (reuse) {
+		for (uint8_t i = 0; i < dim; i++) {
+			reuse->c[i] = r[i];
+		}
+		ZVAL_OBJ_COPY(result, &reuse->std);
+	} else {
+		ugl_vec_new(result, dim, r);
+	}
+	return true;
 }
 
 static zend_result ugl_do_operation(uint8_t opcode, zval *result, zval *op1, zval *op2)
@@ -436,6 +546,7 @@ void zend_register_ugl_vec(void)
 	memcpy(&ugl_vec_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	ugl_vec_handlers.offset = XtOffsetOf(zend_ugl_vec, std);
 	ugl_vec_handlers.clone_obj = NULL;
+	ugl_vec_handlers.dtor_obj = ugl_vec_dtor_obj;
 	ugl_vec_handlers.compare = ugl_compare;
 	ugl_vec_handlers.do_operation = ugl_do_operation;
 	ugl_vec_handlers.read_property = ugl_read_property;
