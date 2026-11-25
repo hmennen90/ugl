@@ -71,37 +71,31 @@ static zend_class_entry *ugl_vec_ce(uint8_t dim)
  * When the last reference goes away, zend_objects_store_del() calls dtor_obj with the
  * refcount raised to 1. Taking one more reference there keeps the object (and its
  * handle) alive, so it can be handed out again without emalloc, the object store and
- * zend_object_std_init(). Not used with ZTS. */
-#ifndef ZTS
-# define UGL_VEC_POOL_MAX 1024
-static zend_ugl_vec *ugl_vec_pool[UGL_VEC_POOL_MAX];
-static uint32_t ugl_vec_pool_count;
-#endif
+ * zend_object_std_init(). */
+#define UGL_VEC_POOL_MAX 1024
+/* One pool per thread: an object belongs to the object store of the thread that made it. */
+ZEND_TLS zend_ugl_vec *ugl_vec_pool[UGL_VEC_POOL_MAX];
+ZEND_TLS uint32_t ugl_vec_pool_count;
 
 void zend_ugl_vec_request_init(void)
 {
-#ifndef ZTS
 	/* The objects themselves were freed with the previous request's object store. */
 	ugl_vec_pool_count = 0;
-#endif
 }
 
 static void ugl_vec_dtor_obj(zend_object *obj)
 {
-#ifndef ZTS
 	if (ugl_vec_pool_count < UGL_VEC_POOL_MAX
 	 && !(GC_FLAGS(obj) & IS_OBJ_WEAKLY_REFERENCED)
 	 && !obj->properties) {
 		ugl_vec_pool[ugl_vec_pool_count++] = ugl_vec_from_obj(obj);
 		GC_ADDREF(obj);
 	}
-#endif
 }
 
 static zend_always_inline zend_ugl_vec *ugl_vec_alloc(zend_class_entry *ce, uint8_t dim)
 {
 	zend_ugl_vec *v;
-#ifndef ZTS
 	if (ugl_vec_pool_count) {
 		v = ugl_vec_pool[--ugl_vec_pool_count];
 		GC_TYPE_INFO(&v->std) = UGL_GC_TYPE_INFO;
@@ -110,7 +104,6 @@ static zend_always_inline zend_ugl_vec *ugl_vec_alloc(zend_class_entry *ce, uint
 		v->initialized = false;
 		return v;
 	}
-#endif
 	v = zend_object_alloc(sizeof(zend_ugl_vec), ce);
 	v->dim = dim;
 	zend_object_std_init(&v->std, ce);
@@ -205,14 +198,12 @@ static zend_always_inline bool ugl_can_overwrite(const zend_ugl_vec *v)
  * zval is cleared, so releasing it afterwards does nothing. */
 static zend_always_inline void ugl_vec_recycle(zval *zv)
 {
-#ifndef ZTS
 	zend_ugl_vec *v = ugl_vec_from_obj(Z_OBJ_P(zv));
 	if (ugl_vec_pool_count < UGL_VEC_POOL_MAX && ugl_can_overwrite(v) && !v->std.properties) {
 		GC_ADD_FLAGS(&v->std, IS_OBJ_DESTRUCTOR_CALLED);
 		ugl_vec_pool[ugl_vec_pool_count++] = v;
 		ZVAL_UNDEF(zv);
 	}
-#endif
 }
 
 ZEND_API void zend_ugl_vec_release_slot(zval *var)
