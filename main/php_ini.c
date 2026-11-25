@@ -15,6 +15,7 @@
  */
 
 #include "php.h"
+#include "zend_ugl_branding.h"
 #include "ext/standard/info.h"
 #include "zend_ini.h"
 #include "zend_ini_scanner.h"
@@ -570,7 +571,11 @@ void php_init_config(void)
 
 		/* Otherwise search for php-%sapi-module-name%.ini file in search path */
 		if (!fp) {
+#ifdef ZEND_UGL
+			const char *fmt = UGL_INI_SAPI_FORMAT;
+#else
 			const char *fmt = "php-%s.ini";
+#endif
 			char *ini_fname;
 			spprintf(&ini_fname, 0, fmt, sapi_module.name);
 			fp = php_fopen_with_path(ini_fname, "r", php_ini_search_path, &opened_path);
@@ -582,7 +587,11 @@ void php_init_config(void)
 
 		/* If still no ini file found, search for php.ini file in search path */
 		if (!fp) {
+#ifdef ZEND_UGL
+			fp = php_fopen_with_path(UGL_INI_FILENAME, "r", php_ini_search_path, &opened_path);
+#else
 			fp = php_fopen_with_path("php.ini", "r", php_ini_search_path, &opened_path);
+#endif
 			if (fp) {
 				filename = ZSTR_VAL(opened_path);
 			}

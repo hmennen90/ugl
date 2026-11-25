@@ -21,6 +21,13 @@
 #define ZEND_INCLUDE_FULL_WINDOWS_HEADERS
 
 #include "php.h"
+#include "zend_ugl_branding.h"
+
+#ifdef ZEND_UGL
+# define PHP_ERROR_LOG_PREFIX UGL_PRODUCT_NAME
+#else
+# define PHP_ERROR_LOG_PREFIX "PHP"
+#endif
 #include <stdio.h>
 #include <fcntl.h>
 #ifdef PHP_WIN32
@@ -127,8 +134,13 @@ PHPAPI char *php_get_version(sapi_module_struct *sapi_module)
 {
 	smart_string version_info = {0};
 	smart_string_append_printf(&version_info,
+#ifdef ZEND_UGL
+		UGL_PRODUCT_NAME " %s (%s) (built: %s) (%s)\n",
+		UGL_PRODUCT_VERSION, sapi_module->name, php_build_date,
+#else
 		"PHP %s (%s) (built: %s) (%s)\n",
 		PHP_VERSION, sapi_module->name, php_build_date,
+#endif
 #ifdef ZTS
 		"ZTS"
 #else
@@ -148,6 +160,9 @@ PHPAPI char *php_get_version(sapi_module_struct *sapi_module)
 #endif
 	);
 	smart_string_appends(&version_info, "Copyright (c) The PHP Group\n");
+#ifdef ZEND_UGL
+	smart_string_append_printf(&version_info, "Language level of the base sources: %s\n", PHP_VERSION);
+#endif
 	if (php_build_provider()) {
 		smart_string_append_printf(&version_info, "Built by %s\n", php_build_provider());
 	}
@@ -1458,7 +1473,7 @@ static ZEND_COLD void php_error_cb(int orig_type, zend_string *error_filename, c
 				syslog(LOG_ALERT, "PHP %s: %s (%s)", error_type_str, ZSTR_VAL(message), GetCommandLine());
 			}
 #endif
-			spprintf(&log_buffer, 0, "PHP %s:  %s in %s on line %" PRIu32 "%s%s", error_type_str, ZSTR_VAL(message), ZSTR_VAL(error_filename), error_lineno, ZSTR_LEN(backtrace) ? "\nStack trace:\n" : "", ZSTR_VAL(backtrace));
+			spprintf(&log_buffer, 0, PHP_ERROR_LOG_PREFIX " %s:  %s in %s on line %" PRIu32 "%s%s", error_type_str, ZSTR_VAL(message), ZSTR_VAL(error_filename), error_lineno, ZSTR_LEN(backtrace) ? "\nStack trace:\n" : "", ZSTR_VAL(backtrace));
 			php_log_err_with_severity(log_buffer, syslog_type_int);
 			efree(log_buffer);
 		}
@@ -2112,7 +2127,11 @@ static void core_globals_dtor(php_core_globals *core_globals)
 
 PHP_MINFO_FUNCTION(php_core) { /* {{{ */
 	php_info_print_table_start();
+#ifdef ZEND_UGL
+	php_info_print_table_row(2, UGL_PRODUCT_NAME " Version", UGL_PRODUCT_VERSION);
+#else
 	php_info_print_table_row(2, "PHP Version", PHP_VERSION);
+#endif
 	php_info_print_table_end();
 	DISPLAY_INI_ENTRIES();
 }

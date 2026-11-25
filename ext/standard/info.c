@@ -17,6 +17,7 @@
 */
 
 #include "php.h"
+#include "zend_ugl_branding.h"
 #include "php_ini.h"
 #include "php_globals.h"
 #include "ext/standard/head.h"
@@ -794,10 +795,17 @@ PHPAPI ZEND_COLD void php_print_info(int flag)
 		}
 
 		if (!sapi_module.phpinfo_as_text) {
+#ifdef ZEND_UGL
+			php_info_printf("<h1 class=\"p\">" UGL_PRODUCT_NAME " Version %s</h1>\n", UGL_PRODUCT_VERSION);
+		} else {
+			php_info_print_table_row(2, UGL_PRODUCT_NAME " Version", UGL_PRODUCT_VERSION);
+		}
+#else
 			php_info_printf("<h1 class=\"p\">PHP Version %s</h1>\n", PHP_VERSION);
 		} else {
 			php_info_print_table_row(2, "PHP Version", PHP_VERSION);
 		}
+#endif
 		php_info_print_box_end();
 		php_info_print_table_start();
 		php_info_print_table_row(2, "System", ZSTR_VAL(php_uname));
@@ -828,7 +836,11 @@ PHPAPI ZEND_COLD void php_print_info(int flag)
 		php_info_print_table_row(2, "Virtual Directory Support", "disabled" );
 #endif
 
+#ifdef ZEND_UGL
+		php_info_print_table_row(2, "Configuration File (" UGL_INI_FILENAME ") Path", PHP_CONFIG_FILE_PATH);
+#else
 		php_info_print_table_row(2, "Configuration File (php.ini) Path", PHP_CONFIG_FILE_PATH);
+#endif
 		php_info_print_table_row(2, "Loaded Configuration File", php_ini_opened_path ? php_ini_opened_path : "(none)");
 		php_info_print_table_row(2, "Scan this dir for additional .ini files", php_ini_scanned_path ? php_ini_scanned_path : "(none)");
 		php_info_print_table_row(2, "Additional .ini files parsed", php_ini_scanned_files ? php_ini_scanned_files : "(none)");

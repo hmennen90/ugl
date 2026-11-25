@@ -1,5 +1,7 @@
 --TEST--
 mat4 and vec4: products in both orders, transpose, inverse, errors
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 function near($a, $b) { return abs($a - $b) < 1e-4; }

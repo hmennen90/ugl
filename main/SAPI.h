@@ -311,7 +311,11 @@ struct _sapi_post_entry {
 
 #define SAPI_DEFAULT_MIMETYPE		"text/html"
 #define SAPI_DEFAULT_CHARSET		PHP_DEFAULT_CHARSET
-#define SAPI_PHP_VERSION_HEADER		"X-Powered-By: PHP/" PHP_VERSION
+#ifdef ZEND_UGL
+# define SAPI_PHP_VERSION_HEADER	"X-Powered-By: UGL/0.1.0-dev"
+#else
+# define SAPI_PHP_VERSION_HEADER		"X-Powered-By: PHP/" PHP_VERSION
+#endif
 
 #define SAPI_POST_READER_FUNC(post_reader) void post_reader(void)
 #define SAPI_POST_HANDLER_FUNC(post_handler) void post_handler(char *content_type_dup, void *arg)

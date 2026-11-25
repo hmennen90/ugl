@@ -1,5 +1,7 @@
 --TEST--
 declare(kind=...): what each profile (data, common, shader) rejects and what it lets through
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 $cases = [

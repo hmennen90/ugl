@@ -9,6 +9,8 @@ opcache.jit_hot_loop=1
 error_reporting=E_ALL & ~E_DEPRECATED
 --EXTENSIONS--
 opcache
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 class P { public float32 $f = 0.0; public int32 $i = 0; public ?float32 $n = null; public float $d = 0.0; }

@@ -17,7 +17,7 @@ dnl Basic autoconf initialization, generation of config.nice.
 dnl ----------------------------------------------------------------------------
 
 AC_PREREQ([2.68])
-AC_INIT([PHP],[8.5.7],[https://github.com/php/php-src/issues],[php],[https://www.php.net])
+AC_INIT([UGL],[8.5.7],[],[ugl],[])
 AC_CONFIG_SRCDIR([main/php_version.h])
 AC_CONFIG_AUX_DIR([build])
 AC_PRESERVE_HELP_ORDER
@@ -265,6 +265,18 @@ PHP_HELP_SEPARATOR([SAPI modules:])
 PHP_SHLIB_SUFFIX_NAMES
 PHP_BUILD_PROGRAM
 PHP_SAPI=none
+
+dnl The UGL switch has to be known before the SAPI configuration (binary name).
+PHP_ARG_ENABLE([ugl],
+  [whether to enable the UGL language extensions],
+  [AS_HELP_STRING([--enable-ugl],
+    [Enable the UGL language extensions (float32, int32, vec2/3/4, mat4, profiles, strict types)])],
+  [no],
+  [no])
+
+AS_VAR_IF([PHP_UGL], [yes], [
+  AC_DEFINE([ZEND_UGL], [1], [Define to 1 to enable the UGL language extensions.])
+])
 
 dnl SAPI configuration.
 dnl ----------------------------------------------------------------------------
@@ -805,17 +817,6 @@ AS_VAR_IF([PHP_GCOV], [yes], [
   dnl Add the special gcc flags.
   CFLAGS="$CFLAGS -O0 -fprofile-arcs -ftest-coverage"
   CXXFLAGS="$CXXFLAGS -O0 -fprofile-arcs -ftest-coverage"
-])
-
-PHP_ARG_ENABLE([ugl],
-  [whether to enable the UGL language extensions],
-  [AS_HELP_STRING([--enable-ugl],
-    [Enable the UGL language extensions (float32, int32, vec2, vec3)])],
-  [no],
-  [no])
-
-AS_VAR_IF([PHP_UGL], [yes], [
-  AC_DEFINE([ZEND_UGL], [1], [Define to 1 to enable the UGL language extensions.])
 ])
 
 PHP_ARG_ENABLE([debug],

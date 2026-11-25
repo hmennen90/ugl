@@ -16,6 +16,7 @@
 #include "zend_API.h"
 #include "zend_exceptions.h"
 #include "zend_ugl_vec.h"
+#include "zend_ugl_branding.h"
 
 #ifdef ZEND_UGL
 
@@ -1037,6 +1038,7 @@ void zend_register_ugl_vec(void)
 	ugl_mat_handlers.get_properties_for = ugl_mat_get_properties_for;
 
 	zend_register_functions(NULL, ugl_functions, NULL, MODULE_PERSISTENT);
+	zend_register_string_constant("UGL_VERSION", sizeof("UGL_VERSION") - 1, UGL_PRODUCT_VERSION, CONST_PERSISTENT, 0);
 
 	zend_ce_ugl_vec2 = ugl_register_class("vec2", ugl_vec2_methods, ugl_vec2_create, &ugl_vec_handlers);
 	zend_ce_ugl_vec3 = ugl_register_class("vec3", ugl_vec3_methods, ugl_vec3_create, &ugl_vec_handlers);

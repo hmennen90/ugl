@@ -27,7 +27,15 @@ if test "$PHP_CLI" != "no"; then
   PHP_ADD_MAKEFILE_FRAGMENT([$abs_srcdir/sapi/cli/Makefile.frag])
 
   dnl Set filename.
-  SAPI_CLI_PATH=sapi/cli/php
+  AS_VAR_IF([PHP_UGL], [yes], [
+    SAPI_CLI_PATH=sapi/cli/ugl
+    PHP_CLI_INSTALL_NAME=ugl
+    PHP_CLI_MAN_NAME=ugl
+  ], [
+    SAPI_CLI_PATH=sapi/cli/php
+    PHP_CLI_INSTALL_NAME=php
+    PHP_CLI_MAN_NAME=php
+  ])
 
   dnl Select SAPI.
   PHP_SELECT_SAPI([cli],
@@ -54,6 +62,8 @@ if test "$PHP_CLI" != "no"; then
 
   PHP_SUBST([PHP_EXECUTABLE])
   PHP_SUBST([SAPI_CLI_PATH])
+  PHP_SUBST([PHP_CLI_INSTALL_NAME])
+  PHP_SUBST([PHP_CLI_MAN_NAME])
   PHP_SUBST([BUILD_CLI])
 
   AC_CONFIG_FILES([sapi/cli/php.1])

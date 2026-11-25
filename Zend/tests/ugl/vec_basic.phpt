@@ -1,5 +1,7 @@
 --TEST--
 vec2 and vec3: operators, swizzling, immutability, type names, int32
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 namespace Game;

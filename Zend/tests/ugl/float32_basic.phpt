@@ -1,5 +1,7 @@
 --TEST--
 float32 declaration type: rounding, coercion, references, reflection, int32
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 function p(float32 $a): float32 { return $a; }

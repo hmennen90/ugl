@@ -8,6 +8,8 @@ opcache.jit_hot_func=1
 opcache.jit_hot_loop=1
 --EXTENSIONS--
 opcache
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 class P3 { public $x = 7.5; public $y = 8; public $z = "s"; }

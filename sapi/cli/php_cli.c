@@ -19,6 +19,7 @@
 */
 
 #include "php.h"
+#include "zend_ugl_branding.h"
 #include "php_globals.h"
 #include "php_variables.h"
 #include "php_ini_builder.h"
@@ -1117,7 +1118,11 @@ do_repeat:
 
 		case PHP_CLI_MODE_SHOW_INI_CONFIG:
 			{
+#ifdef ZEND_UGL
+				zend_printf("Configuration File (" UGL_INI_FILENAME ") Path: \"%s\"\n", PHP_CONFIG_FILE_PATH);
+#else
 				zend_printf("Configuration File (php.ini) Path: \"%s\"\n", PHP_CONFIG_FILE_PATH);
+#endif
 				if (php_ini_opened_path) {
 					zend_printf("Loaded Configuration File:         \"%s\"\n", php_ini_opened_path);
 				} else {

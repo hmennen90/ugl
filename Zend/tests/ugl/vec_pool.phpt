@@ -1,5 +1,7 @@
 --TEST--
 vec2/vec3: recycled objects keep their values, weakrefs and memory behave
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 // stress: recycling must not change values or leak

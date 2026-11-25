@@ -1,5 +1,7 @@
 --TEST--
 vec2/3/4: chained expressions and compound assignments give the same results on every path
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 function chk($name, $v, array $e) { $ok = true; foreach (['x','y','z','w'] as $i => $k) { if (isset($e[$i]) && abs($v->$k - $e[$i]) > 1e-5) $ok = false; } echo $name, ": ", $ok ? "ok" : "WRONG ".json_encode([$v->x, $v->y, $v->z]), "\n"; }

@@ -1,5 +1,7 @@
 --TEST--
 vec2/vec3: += and p = p + x update unshared vectors in place
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 function chk($name, $v, $x, $y, $z) { echo $name, ": ", ($v->x === (float)$x && $v->y === (float)$y && $v->z === (float)$z) ? "ok" : "WRONG ".$v->x.",".$v->y.",".$v->z, "\n"; }

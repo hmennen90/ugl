@@ -31,7 +31,9 @@
 #define ZEND_MODULE_INFO_FUNC_ARGS zend_module_entry *zend_module
 #define ZEND_MODULE_INFO_FUNC_ARGS_PASSTHRU zend_module
 
-#define ZEND_MODULE_API_NO 20250925
+/* 1 in front of the base value: zend_type.type_mask is 64 bits wide, extensions of the base
+ * language must not be loaded. */
+#define ZEND_MODULE_API_NO 120250925
 #ifdef ZTS
 #define USING_ZTS 1
 #else

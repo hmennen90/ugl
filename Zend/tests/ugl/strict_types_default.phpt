@@ -1,5 +1,7 @@
 --TEST--
 UGL compiles every file with strict_types; strict_types=0 is not allowed
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 function f(int $x): int { return $x; }

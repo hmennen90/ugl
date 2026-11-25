@@ -1,5 +1,7 @@
 --TEST--
 vec2/vec3: temporaries are reused, operands and shared values stay untouched
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
 function mk() { return vec3(1, 1, 1); }

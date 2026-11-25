@@ -1,5 +1,7 @@
 --TEST--
 float32 declaration type in strict_types mode
+--SKIPIF--
+<?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php declare(strict_types=1);
 function p(float32 $a): float32 { return $a; }
