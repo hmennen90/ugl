@@ -26,9 +26,9 @@ var_dump((new ReflectionFunction('p'))->getParameters()[0]->getType()->isBuiltin
 --EXPECTF--
 float(0.10000000149011612)
 float(16777216)
-TypeError: p(): Argument #1 ($a) must be of type float32, string given, called in %s on line %d
-TypeError: p(): Argument #1 ($a) must be of type float32, string given, called in %s on line %d
-TypeError: p(): Argument #1 ($a) must be of type float32, null given, called in %s on line %d
+TypeError: p(): Argument #%d ($a) must be of type float32, string given, called in %s on line 9
+TypeError: p(): Argument #%d ($a) must be of type float32, string given, called in %s on line 10
+TypeError: p(): Argument #%d ($a) must be of type float32, null given, called in %s on line 11
 NULL
 float(0.10000000149011612)
 string(1) "x"

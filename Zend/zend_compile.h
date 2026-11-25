@@ -1111,6 +1111,11 @@ ZEND_API zend_string *zend_type_to_string(zend_type type);
 
 #define ZEND_THROW_IS_EXPR 1u
 
+/* ZEND_RECV only stores the low 32 bits of the declared type. These two bits are
+ * free there and mark float32 / int32 so that the handler can take a fast path. */
+#define ZEND_RECV_F32_BIT (1u << 30)
+#define ZEND_RECV_I32_BIT (1u << 31)
+
 #define ZEND_FCALL_MAY_HAVE_EXTRA_NAMED_PARAMS 1
 
 /* The send mode, the is_variadic, the is_promoted, and the is_tentative flags are stored as part of zend_type */

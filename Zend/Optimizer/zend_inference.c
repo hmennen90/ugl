@@ -2386,6 +2386,9 @@ static uint32_t zend_convert_type(const zend_script *script, zend_type type, zen
 	if (ZEND_TYPE_FULL_MASK(type) & MAY_BE_FLOAT32) {
 		tmp |= MAY_BE_DOUBLE;
 	}
+	if (ZEND_TYPE_FULL_MASK(type) & MAY_BE_INT32) {
+		tmp |= MAY_BE_LONG;
+	}
 	if (ZEND_TYPE_IS_COMPLEX(type)) {
 		tmp |= MAY_BE_OBJECT;
 		if (pce) {

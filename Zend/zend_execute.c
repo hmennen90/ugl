@@ -737,22 +737,31 @@ static bool zend_verify_weak_scalar_type_hint(zend_type_mask_t type_mask, zval *
 	zend_string *str;
 	bool bval;
 
-	if (UNEXPECTED(type_mask & MAY_BE_FLOAT32)) {
-		/* float32: values stay IS_DOUBLE, but are rounded to single precision. */
+	if (UNEXPECTED(type_mask & _ZEND_TYPE_UGL_SCALAR_MASK)) {
+		/* float32 / int32: values stay IS_DOUBLE / IS_LONG. float32 rounds to single
+		 * precision, int32 is range-checked. Other source types are coerced like
+		 * float / int first. */
+		if (zend_ugl_check_fast(type_mask, arg)) {
+			return 1;
+		}
+		zend_type_mask_t rest = type_mask & ~_ZEND_TYPE_UGL_SCALAR_MASK;
+		if (type_mask & MAY_BE_FLOAT32) {
+			rest |= MAY_BE_DOUBLE;
+		}
+		if (type_mask & MAY_BE_INT32) {
+			rest |= MAY_BE_LONG;
+		}
+		if (!zend_verify_weak_scalar_type_hint(rest, arg)) {
+			return 0;
+		}
 		if (Z_TYPE_P(arg) == IS_DOUBLE) {
-			ZVAL_DOUBLE(arg, (double) (float) Z_DVAL_P(arg));
-			return 1;
+			if (type_mask & MAY_BE_FLOAT32) {
+				ZVAL_DOUBLE(arg, (double) (float) Z_DVAL_P(arg));
+			}
+		} else if (Z_TYPE_P(arg) == IS_LONG && (type_mask & MAY_BE_INT32) && !(type_mask & MAY_BE_LONG)) {
+			return Z_LVAL_P(arg) == (zend_long) (int32_t) Z_LVAL_P(arg);
 		}
-		if (Z_TYPE_P(arg) == IS_LONG) {
-			ZVAL_DOUBLE(arg, (double) (float) Z_LVAL_P(arg));
-			return 1;
-		}
-		bool ok = zend_verify_weak_scalar_type_hint(
-			(type_mask & ~MAY_BE_FLOAT32) | MAY_BE_DOUBLE, arg);
-		if (ok && Z_TYPE_P(arg) == IS_DOUBLE) {
-			ZVAL_DOUBLE(arg, (double) (float) Z_DVAL_P(arg));
-		}
-		return ok;
+		return 1;
 	}
 
 	/* Type preference order: int -> float -> string -> bool */
@@ -818,6 +827,9 @@ static bool zend_verify_weak_scalar_type_hint_no_sideeffect(zend_type_mask_t typ
 	if (type_mask & MAY_BE_FLOAT32) {
 		type_mask = (type_mask & ~MAY_BE_FLOAT32) | MAY_BE_DOUBLE;
 	}
+	if (type_mask & MAY_BE_INT32) {
+		type_mask = (type_mask & ~MAY_BE_INT32) | MAY_BE_LONG;
+	}
 
 	/* Pass (uint32_t)-1 as arg_num to indicate to ZPP not to emit any deprecation notice,
 	 * this is needed because the version with side effects also uses 0 (e.g. for typed properties) */
@@ -843,14 +855,15 @@ ZEND_API bool zend_verify_scalar_type_hint(zend_type_mask_t type_mask, zval *arg
 		/* SSTH Exception: IS_LONG may be accepted as IS_DOUBLE (converted).
 		 * float32 also takes float (rounded) and int in strict mode. */
 		if (!((type_mask & MAY_BE_DOUBLE) && Z_TYPE_P(arg) == IS_LONG)
-		 && !((type_mask & MAY_BE_FLOAT32) && (Z_TYPE_P(arg) == IS_LONG || Z_TYPE_P(arg) == IS_DOUBLE))) {
+		 && !((type_mask & MAY_BE_FLOAT32) && (Z_TYPE_P(arg) == IS_LONG || Z_TYPE_P(arg) == IS_DOUBLE))
+		 && !((type_mask & MAY_BE_INT32) && Z_TYPE_P(arg) == IS_LONG)) {
 			return 0;
 		}
 	} else if (UNEXPECTED(Z_TYPE_P(arg) == IS_NULL)) {
 		/* NULL may be accepted only by nullable hints (this is already checked).
 		 * As an exception for internal functions, null is allowed for scalar types in weak mode. */
 		return is_internal_arg
-			&& (type_mask & (MAY_BE_TRUE|MAY_BE_FALSE|MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING|MAY_BE_FLOAT32));
+			&& (type_mask & (MAY_BE_TRUE|MAY_BE_FALSE|MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING|MAY_BE_FLOAT32|MAY_BE_INT32));
 	}
 #if ZEND_DEBUG
 	if (is_internal_arg) {
@@ -1068,6 +1081,11 @@ static zend_always_inline bool i_zend_check_property_type(const zend_property_in
 		return 1;
 	}
 
+	if (UNEXPECTED(ZEND_TYPE_FULL_MASK(info->type) & _ZEND_TYPE_UGL_SCALAR_MASK)
+	 && zend_ugl_check_fast(ZEND_TYPE_FULL_MASK(info->type), property)) {
+		return 1;
+	}
+
 	if (ZEND_TYPE_IS_COMPLEX(info->type) && Z_TYPE_P(property) == IS_OBJECT
 			&& zend_check_and_resolve_property_or_class_constant_class_type(info->ce, info->type, Z_OBJCE_P(property))) {
 		return 1;
@@ -1224,6 +1242,9 @@ static zend_always_inline bool zend_check_type_slow(
 			double d = Z_DVAL_P(arg);
 			return d != d || (double) (float) d == d;
 		}
+		if ((type_mask & MAY_BE_INT32) && Z_TYPE_P(arg) == IS_LONG) {
+			return Z_LVAL_P(arg) == (zend_long) (int32_t) Z_LVAL_P(arg);
+		}
 		return 0;
 	}
 	if (is_internal && is_return_type) {
@@ -1254,6 +1275,12 @@ static zend_always_inline bool zend_check_type(
 	}
 
 	if (EXPECTED(ZEND_TYPE_CONTAINS_CODE(*type, Z_TYPE_P(arg)))) {
+		return 1;
+	}
+
+	if (UNEXPECTED(ZEND_TYPE_FULL_MASK(*type) & _ZEND_TYPE_UGL_SCALAR_MASK)
+	 && (!ref || !ZEND_REF_HAS_TYPE_SOURCES(ref))
+	 && zend_ugl_check_fast(ZEND_TYPE_FULL_MASK(*type), arg)) {
 		return 1;
 	}
 
@@ -3966,7 +3993,8 @@ static zend_always_inline int i_zend_verify_type_assignable_zval(
 	/* SSTH Exception: IS_LONG may be accepted as IS_DOUBLE (converted) */
 	if (strict) {
 		if (((type_mask & MAY_BE_DOUBLE) && zv_type == IS_LONG)
-		 || ((type_mask & MAY_BE_FLOAT32) && (zv_type == IS_LONG || zv_type == IS_DOUBLE))) {
+		 || ((type_mask & MAY_BE_FLOAT32) && (zv_type == IS_LONG || zv_type == IS_DOUBLE))
+		 || ((type_mask & MAY_BE_INT32) && zv_type == IS_LONG)) {
 			return -1;
 		}
 		return 0;
@@ -3978,7 +4006,7 @@ static zend_always_inline int i_zend_verify_type_assignable_zval(
 	}
 
 	/* Does not contain any type to which a coercion is possible */
-	if (!(type_mask & (MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING|MAY_BE_FLOAT32))
+	if (!(type_mask & (MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING|_ZEND_TYPE_UGL_SCALAR_MASK))
 			&& (type_mask & MAY_BE_BOOL) != MAY_BE_BOOL) {
 		return 0;
 	}

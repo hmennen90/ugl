@@ -684,6 +684,19 @@ ZEND_API inheritance_status zend_perform_covariant_type_check(
 		return INHERITANCE_SUCCESS;
 	}
 
+	/* float32 and int32 are subtypes of float and int respectively: they may be
+	 * kept, or replaced by (or removed in favour of) their wider type, but not added
+	 * on their own. */
+	zend_type_mask_t fe_ugl = ZEND_TYPE_FULL_MASK(fe_type) & _ZEND_TYPE_UGL_SCALAR_MASK;
+	if (fe_ugl) {
+		zend_type_mask_t proto_ugl = ZEND_TYPE_FULL_MASK(proto_type) & _ZEND_TYPE_UGL_SCALAR_MASK;
+		uint32_t proto_pure = ZEND_TYPE_PURE_MASK(proto_type);
+		if (((fe_ugl & MAY_BE_FLOAT32) && !(proto_ugl & MAY_BE_FLOAT32) && !(proto_pure & MAY_BE_DOUBLE))
+		 || ((fe_ugl & MAY_BE_INT32) && !(proto_ugl & MAY_BE_INT32) && !(proto_pure & MAY_BE_LONG))) {
+			return INHERITANCE_ERROR;
+		}
+	}
+
 	/* Builtin types may be removed, but not added */
 	uint32_t fe_type_mask = ZEND_TYPE_PURE_MASK(fe_type);
 	uint32_t proto_type_mask = ZEND_TYPE_PURE_MASK(proto_type);

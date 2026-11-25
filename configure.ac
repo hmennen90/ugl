@@ -807,6 +807,17 @@ AS_VAR_IF([PHP_GCOV], [yes], [
   CXXFLAGS="$CXXFLAGS -O0 -fprofile-arcs -ftest-coverage"
 ])
 
+PHP_ARG_ENABLE([ugl],
+  [whether to enable the UGL language extensions],
+  [AS_HELP_STRING([--enable-ugl],
+    [Enable the UGL language extensions (float32, int32, vec2, vec3)])],
+  [no],
+  [no])
+
+AS_VAR_IF([PHP_UGL], [yes], [
+  AC_DEFINE([ZEND_UGL], [1], [Define to 1 to enable the UGL language extensions.])
+])
+
 PHP_ARG_ENABLE([debug],
   [whether to include debugging symbols],
   [AS_HELP_STRING([--enable-debug],
@@ -1789,6 +1800,7 @@ PHP_ADD_SOURCES([Zend], m4_normalize([
     zend_string.c
     zend_strtod.c
     zend_system_id.c
+    zend_ugl_vec.c
     zend_variables.c
     zend_virtual_cwd.c
     zend_vm_opcodes.c

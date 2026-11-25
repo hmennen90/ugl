@@ -23,6 +23,7 @@
 #include "zend_ast.h"
 #include "zend_attributes.h"
 #include "zend_compile.h"
+#include "zend_ugl_vec.h"
 #include "zend_constants.h"
 #include "zend_llist.h"
 #include "zend_API.h"
@@ -265,7 +266,10 @@ static const builtin_type_info builtin_types[] = {
 	{ZEND_STRL("false"), IS_FALSE},
 	{ZEND_STRL("int"), IS_LONG},
 	{ZEND_STRL("float"), IS_DOUBLE},
+#ifdef ZEND_UGL
 	{ZEND_STRL("float32"), _IS_FLOAT32},
+	{ZEND_STRL("int32"), _IS_INT32},
+#endif
 	{ZEND_STRL("string"), IS_STRING},
 	{ZEND_STRL("bool"), _IS_BOOL},
 	{ZEND_STRL("void"), IS_VOID},
@@ -1199,6 +1203,13 @@ static zend_string *zend_resolve_class_name(zend_string *name, uint32_t type) /*
 		}
 	}
 
+#ifdef ZEND_UGL
+	/* vec2 and vec3 are global classes that need no import. */
+	if (zend_is_ugl_class_name(name)) {
+		return zend_string_copy(name);
+	}
+#endif
+
 	/* If not fully qualified and not an alias, prepend the current namespace */
 	return zend_prefix_with_ns(name);
 }
@@ -1492,6 +1503,10 @@ zend_string *zend_type_to_string_resolved(const zend_type type, zend_class_entry
 	}
 	if (ZEND_TYPE_FULL_MASK(type) & MAY_BE_FLOAT32) {
 		zend_string *name = zend_string_init_interned("float32", sizeof("float32") - 1, true);
+		str = add_type_string(str, name, /* is_intersection */ false);
+	}
+	if (ZEND_TYPE_FULL_MASK(type) & MAY_BE_INT32) {
+		zend_string *name = zend_string_init_interned("int32", sizeof("int32") - 1, true);
 		str = add_type_string(str, name, /* is_intersection */ false);
 	}
 	if ((type_mask & MAY_BE_BOOL) == MAY_BE_BOOL) {
@@ -7509,6 +7524,9 @@ static bool zend_is_valid_default_value(zend_type type, zval *value)
 		ZVAL_DOUBLE(value, (double) (float) d);
 		return 1;
 	}
+	if ((ZEND_TYPE_FULL_MASK(type) & MAY_BE_INT32) && Z_TYPE_P(value) == IS_LONG) {
+		return Z_LVAL_P(value) == (zend_long) (int32_t) Z_LVAL_P(value);
+	}
 	if ((ZEND_TYPE_FULL_MASK(type) & MAY_BE_DOUBLE) && Z_TYPE_P(value) == IS_LONG) {
 		/* Integers are allowed as initializers for floating-point values. */
 		convert_to_double(value);
@@ -7930,7 +7948,10 @@ static void zend_compile_params(zend_ast *ast, zend_ast *return_type_ast, uint32
 			/* RECV only sees the low 32 bits of the mask. Built-in types above
 			 * bit 31 must not be checked via op2.num. */
 			opline->op2.num = type_ast ?
-				(uint32_t) ZEND_TYPE_FULL_MASK(arg_info->type) : MAY_BE_ANY;
+				(uint32_t) ZEND_TYPE_FULL_MASK(arg_info->type)
+					| ((ZEND_TYPE_FULL_MASK(arg_info->type) & MAY_BE_FLOAT32) ? ZEND_RECV_F32_BIT : 0)
+					| ((ZEND_TYPE_FULL_MASK(arg_info->type) & MAY_BE_INT32) ? ZEND_RECV_I32_BIT : 0)
+				: MAY_BE_ANY;
 		}
 
 		if (is_promoted) {

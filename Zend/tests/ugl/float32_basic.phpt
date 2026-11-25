@@ -1,5 +1,5 @@
 --TEST--
-float32 declaration type: rounding, coercion, references, reflection
+float32 declaration type: rounding, coercion, references, reflection, int32
 --FILE--
 <?php
 function p(float32 $a): float32 { return $a; }
@@ -23,12 +23,17 @@ t(function() use ($c) { $r = &$c->x; $r = 0.5; return $r; });
 echo (new ReflectionFunction('p'))->getParameters()[0]->getType(), " ", (new ReflectionFunction('n'))->getReturnType(), " ", (new ReflectionFunction('u'))->getReturnType(), "\n";
 var_dump((new ReflectionFunction('p'))->getParameters()[0]->getType()->isBuiltin());
 (function(float32 $a) { var_dump($a); })(0.3);
+function i32(int32 $x): int32 { return $x; }
+function m(int32|float32|null $x): int32|float32|null { return $x; }
+for ($k = 0; $k < 3; $k++) { // run hot so the JIT compiles it
+  foreach ([5, 2147483647, 2147483648, -2147483649, 0.1, 16777217, "7", null] as $v) { try { var_dump(i32($v)); } catch (TypeError $e) { echo "TE\n"; } try { var_dump(m($v)); } catch (TypeError $e) { echo "TE\n"; } }
+}
 --EXPECTF--
 float(0.10000000149011612)
 float(16777216)
 float(1.5)
-TypeError: p(): Argument #1 ($a) must be of type float32, string given, called in %s on line %d
-TypeError: p(): Argument #1 ($a) must be of type float32, null given, called in %s on line %d
+TypeError: p(): Argument #%d ($a) must be of type float32, string given, called in %s on line 10
+TypeError: p(): Argument #%d ($a) must be of type float32, null given, called in %s on line 11
 NULL
 float(0.10000000149011612)
 string(1) "x"
@@ -42,3 +47,57 @@ float(0.5)
 float32 ?float32 string|float32
 bool(true)
 float(0.30000001192092896)
+int(5)
+int(5)
+int(2147483647)
+int(2147483647)
+TE
+float(2147483648)
+TE
+float(-2147483648)
+
+Deprecated: Implicit conversion from float 0.1 to int loses precision in %s on line 23
+int(0)
+float(0.10000000149011612)
+int(16777217)
+int(16777217)
+int(7)
+int(7)
+TE
+NULL
+int(5)
+int(5)
+int(2147483647)
+int(2147483647)
+TE
+float(2147483648)
+TE
+float(-2147483648)
+
+Deprecated: Implicit conversion from float 0.1 to int loses precision in %s on line 23
+int(0)
+float(0.10000000149011612)
+int(16777217)
+int(16777217)
+int(7)
+int(7)
+TE
+NULL
+int(5)
+int(5)
+int(2147483647)
+int(2147483647)
+TE
+float(2147483648)
+TE
+float(-2147483648)
+
+Deprecated: Implicit conversion from float 0.1 to int loses precision in %s on line 23
+int(0)
+float(0.10000000149011612)
+int(16777217)
+int(16777217)
+int(7)
+int(7)
+TE
+NULL

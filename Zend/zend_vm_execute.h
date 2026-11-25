@@ -4322,6 +4322,10 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_R
 	param = EX_VAR(opline->result.var);
 
 	if (UNEXPECTED(!(opline->op2.num & (1u << Z_TYPE_P(param))))) {
+		if (UNEXPECTED(opline->op2.num & (ZEND_RECV_F32_BIT|ZEND_RECV_I32_BIT))
+		 && zend_ugl_recv_fast(opline->op2.num, param)) {
+			ZEND_VM_NEXT_OPCODE();
+		}
 		ZEND_VM_DISPATCH_TO_HELPER(zend_verify_recv_arg_type_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU_EX param));
 	}
 
@@ -60001,6 +60005,10 @@ static ZEND_VM_HOT ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_RECV_S
 	param = EX_VAR(opline->result.var);
 
 	if (UNEXPECTED(!(opline->op2.num & (1u << Z_TYPE_P(param))))) {
+		if (UNEXPECTED(opline->op2.num & (ZEND_RECV_F32_BIT|ZEND_RECV_I32_BIT))
+		 && zend_ugl_recv_fast(opline->op2.num, param)) {
+			ZEND_VM_NEXT_OPCODE();
+		}
 		ZEND_VM_DISPATCH_TO_HELPER(zend_verify_recv_arg_type_helper_SPEC_TAILCALL(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU_EX param));
 	}
 

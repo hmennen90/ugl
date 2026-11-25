@@ -101,6 +101,36 @@ ZEND_API bool ZEND_FASTCALL zend_asymmetric_property_has_set_access(const zend_p
 ZEND_API ZEND_COLD void ZEND_FASTCALL zend_asymmetric_visibility_property_modification_error(const zend_property_info *prop_info, const char *operation);
 
 ZEND_API bool zend_verify_scalar_type_hint(zend_type_mask_t type_mask, zval *arg, bool strict, bool is_internal_arg);
+
+/* Fast path for the declaration types float32 and int32. Values stay IS_DOUBLE / IS_LONG.
+ * float32 rounds the value to single precision in place, int32 only checks the range.
+ * Returns false when the generic path has to decide (other types, out of range, ...). */
+static zend_always_inline bool zend_ugl_check_fast(zend_type_mask_t type_mask, zval *arg)
+{
+	if (type_mask & MAY_BE_FLOAT32) {
+		if (Z_TYPE_P(arg) == IS_DOUBLE) {
+			ZVAL_DOUBLE(arg, (double) (float) Z_DVAL_P(arg));
+			return 1;
+		}
+		if (Z_TYPE_P(arg) == IS_LONG) {
+			if (!(type_mask & MAY_BE_INT32)
+			 || Z_LVAL_P(arg) != (zend_long) (int32_t) Z_LVAL_P(arg)) {
+				ZVAL_DOUBLE(arg, (double) (float) Z_LVAL_P(arg));
+			}
+			return 1;
+		}
+	}
+	return (type_mask & MAY_BE_INT32) && Z_TYPE_P(arg) == IS_LONG
+		&& Z_LVAL_P(arg) == (zend_long) (int32_t) Z_LVAL_P(arg);
+}
+
+/* Same for ZEND_RECV, which only has the low 32 bits of the type (op2.num). */
+static zend_always_inline bool zend_ugl_recv_fast(uint32_t recv_mask, zval *arg)
+{
+	zend_type_mask_t type_mask = ((recv_mask & ZEND_RECV_F32_BIT) ? MAY_BE_FLOAT32 : 0)
+		| ((recv_mask & ZEND_RECV_I32_BIT) ? MAY_BE_INT32 : 0);
+	return zend_ugl_check_fast(type_mask, arg);
+}
 ZEND_API ZEND_COLD void zend_verify_arg_error(
 		const zend_function *zf, const zend_arg_info *arg_info, uint32_t arg_num, const zval *value);
 ZEND_API ZEND_COLD void zend_verify_return_error(

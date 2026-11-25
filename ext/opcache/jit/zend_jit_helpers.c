@@ -1971,6 +1971,13 @@ check_indirect:
 	return ref;
 }
 
+/* Rounds to single precision. The IR optimizer folds (double)(float)x to x, so this
+ * can not be expressed with FP2FP conversions. */
+static double ZEND_FASTCALL zend_jit_f32_round(double d)
+{
+	return (double) (float) d;
+}
+
 static bool ZEND_FASTCALL zend_jit_verify_arg_slow(zval *arg, zend_arg_info *arg_info)
 {
 	zend_execute_data *execute_data = EG(current_execute_data);

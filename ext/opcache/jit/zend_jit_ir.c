@@ -3135,6 +3135,7 @@ static void zend_jit_setup_disasm(void)
 	REGISTER_HELPER(zend_jit_free_call_frame);
 	REGISTER_HELPER(zend_jit_exception_in_interrupt_handler_helper);
 	REGISTER_HELPER(zend_jit_verify_arg_slow);
+	REGISTER_HELPER(zend_jit_f32_round);
 	REGISTER_HELPER(zend_missing_arg_error);
 	REGISTER_HELPER(zend_jit_only_vars_by_reference);
 	REGISTER_HELPER(zend_jit_leave_func_helper);
@@ -10766,6 +10767,34 @@ static int zend_jit_constructor(zend_jit_ctx *jit, const zend_op *opline, const 
 	return 1;
 }
 
+/* Inline fast paths for the declaration types float32 / int32.
+ * They emit the successful case, return the control-flow end of it and leave the
+ * generator in the "not handled here" branch. */
+static ir_ref jit_ugl_f32_fast(zend_jit_ctx *jit, ir_ref ref)
+{
+	ir_ref if_dbl = jit_if_Z_TYPE_ref(jit, ref, ir_CONST_U8(IS_DOUBLE));
+	ir_IF_TRUE(if_dbl);
+	ir_STORE(ref, ir_CALL_1(IR_DOUBLE, ir_CONST_FC_FUNC(zend_jit_f32_round), jit_Z_DVAL_ref(jit, ref)));
+	ir_ref end = ir_END();
+	ir_IF_FALSE_cold(if_dbl);
+	return end;
+}
+
+static ir_ref jit_ugl_i32_fast(zend_jit_ctx *jit, ir_ref ref)
+{
+	ir_ref if_long = jit_if_Z_TYPE_ref(jit, ref, ir_CONST_U8(IS_LONG));
+	ir_IF_TRUE(if_long);
+	ir_ref lval = jit_Z_LVAL_ref(jit, ref);
+	ir_ref if_in = ir_IF(ir_EQ(ir_SEXT(IR_I64, ir_TRUNC_I32(lval)), lval));
+	ir_IF_TRUE(if_in);
+	ir_ref end = ir_END();
+	ir_IF_FALSE_cold(if_in);
+	ir_ref not_in = ir_END();
+	ir_IF_FALSE_cold(if_long);
+	ir_MERGE_WITH(not_in);
+	return end;
+}
+
 static int zend_jit_verify_arg_type(zend_jit_ctx *jit, const zend_op *opline, zend_arg_info *arg_info, bool check_exception)
 {
 	zend_jit_addr res_addr = ZEND_ADDR_MEM_ZVAL(ZREG_FP, opline->result.var);
@@ -10791,6 +10820,14 @@ static int zend_jit_verify_arg_type(zend_jit_ctx *jit, const zend_op *opline, ze
 			ref = jit_Z_PTR_ref(jit, ref);
 			ref = ir_ADD_OFFSET(ref, offsetof(zend_reference, val));
 		}
+	}
+
+	ir_ref ugl_fast[2] = {IR_UNUSED, IR_UNUSED};
+	if (UNEXPECTED(ZEND_TYPE_FULL_MASK(arg_info->type) & MAY_BE_FLOAT32)) {
+		ugl_fast[0] = jit_ugl_f32_fast(jit, ref);
+	}
+	if (UNEXPECTED(ZEND_TYPE_FULL_MASK(arg_info->type) & MAY_BE_INT32)) {
+		ugl_fast[1] = jit_ugl_i32_fast(jit, ref);
 	}
 
 	if (type_mask != 0) {
@@ -10820,6 +10857,12 @@ static int zend_jit_verify_arg_type(zend_jit_ctx *jit, const zend_op *opline, ze
 
 	if (fast_path) {
 		ir_MERGE_WITH(fast_path);
+	}
+	if (ugl_fast[0]) {
+		ir_MERGE_WITH(ugl_fast[0]);
+	}
+	if (ugl_fast[1]) {
+		ir_MERGE_WITH(ugl_fast[1]);
 	}
 
 	return 1;
@@ -10976,6 +11019,17 @@ static bool zend_jit_verify_return_type(zend_jit_ctx *jit, const zend_op *opline
 			ir_IF_FALSE_cold(if_ok);
 		}
 	}
+	ir_ref ugl_fast[2] = {IR_UNUSED, IR_UNUSED};
+	if (needs_slow_check && UNEXPECTED(ZEND_TYPE_FULL_MASK(arg_info->type) & _ZEND_TYPE_UGL_SCALAR_MASK)
+	 && !(op1_info & MAY_BE_UNDEF)) {
+		ir_ref zv = jit_ZVAL_ADDR(jit, op1_addr);
+		if ((ZEND_TYPE_FULL_MASK(arg_info->type) & MAY_BE_FLOAT32) && (op1_info & MAY_BE_DOUBLE)) {
+			ugl_fast[0] = jit_ugl_f32_fast(jit, zv);
+		}
+		if ((ZEND_TYPE_FULL_MASK(arg_info->type) & MAY_BE_INT32) && (op1_info & MAY_BE_LONG)) {
+			ugl_fast[1] = jit_ugl_i32_fast(jit, zv);
+		}
+	}
 	if (needs_slow_check) {
 		ir_ref ref;
 
@@ -10994,6 +11048,12 @@ static bool zend_jit_verify_return_type(zend_jit_ctx *jit, const zend_op *opline
 
 		if (fast_path) {
 			ir_MERGE_WITH(fast_path);
+		}
+		if (ugl_fast[0]) {
+			ir_MERGE_WITH(ugl_fast[0]);
+		}
+		if (ugl_fast[1]) {
+			ir_MERGE_WITH(ugl_fast[1]);
 		}
 	}
 

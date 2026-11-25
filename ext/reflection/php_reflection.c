@@ -1489,6 +1489,7 @@ typedef enum {
  * what doesn't. */
 static reflection_type_kind get_type_kind(zend_type type) {
 	uint32_t type_mask_without_null = ZEND_TYPE_PURE_MASK_WITHOUT_NULL(type);
+	zend_type_mask_t ugl_mask = ZEND_TYPE_FULL_MASK(type) & _ZEND_TYPE_UGL_SCALAR_MASK;
 
 	if (ZEND_TYPE_HAS_LIST(type)) {
 		if (ZEND_TYPE_IS_INTERSECTION(type)) {
@@ -1503,7 +1504,7 @@ static reflection_type_kind get_type_kind(zend_type type) {
 		if (UNEXPECTED(ZEND_TYPE_IS_ITERABLE_FALLBACK(type))) {
 			return NAMED_TYPE;
 		}
-		if (type_mask_without_null != 0) {
+		if (type_mask_without_null != 0 || ugl_mask != 0) {
 			return UNION_TYPE;
 		}
 		return NAMED_TYPE;
@@ -1512,7 +1513,8 @@ static reflection_type_kind get_type_kind(zend_type type) {
 		return NAMED_TYPE;
 	}
 	/* Check that only one bit is set. */
-	if ((type_mask_without_null & (type_mask_without_null - 1)) != 0) {
+	zend_type_mask_t all_bits = (zend_type_mask_t) type_mask_without_null | ugl_mask;
+	if ((all_bits & (all_bits - 1)) != 0) {
 		return UNION_TYPE;
 	}
 	return NAMED_TYPE;
@@ -3181,7 +3183,7 @@ static void append_type(zval *return_value, zend_type type) {
 	zend_hash_next_index_insert(Z_ARRVAL_P(return_value), &reflection_type);
 }
 
-static void append_type_mask(zval *return_value, uint32_t type_mask) {
+static void append_type_mask(zval *return_value, zend_type_mask_t type_mask) {
 	append_type(return_value, (zend_type) ZEND_TYPE_INIT_MASK(type_mask));
 }
 
@@ -3227,8 +3229,14 @@ ZEND_METHOD(ReflectionUnionType, getTypes)
 	if (type_mask & MAY_BE_LONG) {
 		append_type_mask(return_value, MAY_BE_LONG);
 	}
+	if (ZEND_TYPE_FULL_MASK(param->type) & MAY_BE_INT32) {
+		append_type_mask(return_value, MAY_BE_INT32);
+	}
 	if (type_mask & MAY_BE_DOUBLE) {
 		append_type_mask(return_value, MAY_BE_DOUBLE);
+	}
+	if (ZEND_TYPE_FULL_MASK(param->type) & MAY_BE_FLOAT32) {
+		append_type_mask(return_value, MAY_BE_FLOAT32);
 	}
 	if ((type_mask & MAY_BE_BOOL) == MAY_BE_BOOL) {
 		append_type_mask(return_value, MAY_BE_BOOL);

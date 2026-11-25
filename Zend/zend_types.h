@@ -155,6 +155,11 @@ typedef struct {
 #define _ZEND_TYPE_BUILTIN_MASK (~(zend_type_mask_t) 0 << 32)
 #define _IS_FLOAT32 32
 #define MAY_BE_FLOAT32 _ZEND_TYPE_BIT(_IS_FLOAT32)
+#define _IS_INT32 33
+#define MAY_BE_INT32 _ZEND_TYPE_BIT(_IS_INT32)
+/* Types whose values are zvals of another type (IS_DOUBLE / IS_LONG) and that are
+ * checked/rounded by zend_ugl_check_fast() instead of by their zval type. */
+#define _ZEND_TYPE_UGL_SCALAR_MASK (MAY_BE_FLOAT32|MAY_BE_INT32)
 #define _ZEND_TYPE_MASK ((_ZEND_TYPE_BIT(25) - 1) | _ZEND_TYPE_BUILTIN_MASK)
 /* Only one of these bits may be set. */
 #define _ZEND_TYPE_NAME_BIT _ZEND_TYPE_BIT(24)
