@@ -10770,11 +10770,18 @@ static int zend_jit_constructor(zend_jit_ctx *jit, const zend_op *opline, const 
 /* Inline fast paths for the declaration types float32 / int32.
  * They emit the successful case, return the control-flow end of it and leave the
  * generator in the "not handled here" branch. */
+/* (double)(float)d. The IR optimizer folds D2F/F2D pairs (also through bitcasts) to d,
+ * so this has to be a call. */
+static ir_ref jit_ugl_f32_round(zend_jit_ctx *jit, ir_ref dval)
+{
+	return ir_CALL_1(IR_DOUBLE, ir_CONST_FC_FUNC(zend_jit_f32_round), dval);
+}
+
 static ir_ref jit_ugl_f32_fast(zend_jit_ctx *jit, ir_ref ref)
 {
 	ir_ref if_dbl = jit_if_Z_TYPE_ref(jit, ref, ir_CONST_U8(IS_DOUBLE));
 	ir_IF_TRUE(if_dbl);
-	ir_STORE(ref, ir_CALL_1(IR_DOUBLE, ir_CONST_FC_FUNC(zend_jit_f32_round), jit_Z_DVAL_ref(jit, ref)));
+	ir_STORE(ref, jit_ugl_f32_round(jit, jit_Z_DVAL_ref(jit, ref)));
 	ir_ref end = ir_END();
 	ir_IF_FALSE_cold(if_dbl);
 	return end;
@@ -15049,6 +15056,34 @@ static int zend_jit_assign_obj(zend_jit_ctx         *jit,
 				arg4 = jit_ZVAL_ADDR(jit, real_addr);
 			} else {
 				arg4 = jit_ZVAL_ADDR(jit, res_addr);
+			}
+
+			/* float32 / int32 property that currently holds a plain double / int (so not
+			 * a reference) and receives a value of that type: round or range check and
+			 * store inline, everything else goes to the helper. */
+			zend_type_mask_t prop_mask = ZEND_TYPE_FULL_MASK(prop_info->type);
+			if (opline->result_type == IS_UNUSED
+			 && (val_info & (MAY_BE_ANY|MAY_BE_REF|MAY_BE_UNDEF)) == MAY_BE_DOUBLE
+			 && prop_mask == MAY_BE_FLOAT32) {
+				ir_ref if_dbl = jit_if_Z_TYPE(jit, prop_addr, IS_DOUBLE);
+				ir_IF_TRUE(if_dbl);
+				jit_set_Z_DVAL(jit, prop_addr, jit_ugl_f32_round(jit, jit_Z_DVAL(jit, val_addr)));
+				ir_END_list(end_inputs);
+				ir_IF_FALSE_cold(if_dbl);
+			} else if (opline->result_type == IS_UNUSED
+			 && (val_info & (MAY_BE_ANY|MAY_BE_REF|MAY_BE_UNDEF)) == MAY_BE_LONG
+			 && prop_mask == MAY_BE_INT32) {
+				ir_ref if_long = jit_if_Z_TYPE(jit, prop_addr, IS_LONG);
+				ir_IF_TRUE(if_long);
+				ir_ref lval = jit_Z_LVAL(jit, val_addr);
+				ir_ref if_in = ir_IF(ir_EQ(ir_SEXT(IR_I64, ir_TRUNC_I32(lval)), lval));
+				ir_IF_TRUE(if_in);
+				jit_set_Z_LVAL(jit, prop_addr, lval);
+				ir_END_list(end_inputs);
+				ir_IF_FALSE_cold(if_in);
+				ir_ref not_in = ir_END();
+				ir_IF_FALSE_cold(if_long);
+				ir_MERGE_WITH(not_in);
 			}
 			ir_CALL_4(IR_VOID, ir_CONST_FC_FUNC(zend_jit_assign_to_typed_prop),
 				prop_ref,
