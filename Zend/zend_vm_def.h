@@ -186,7 +186,9 @@ ZEND_VM_HELPER(zend_mul_helper, ANY, ANY, zval *op_1, zval *op_2)
 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
 }
 
-ZEND_VM_COLD_CONSTCONST_HANDLER(3, ZEND_MUL, CONST|TMPVARCV, CONST|TMPVARCV, SPEC(COMMUTATIVE))
+/* Not SPEC(COMMUTATIVE): the VM would swap the operands, which is wrong for objects whose
+ * multiplication is not commutative (mat4 * vec4 versus vec4 * mat4). */
+ZEND_VM_COLD_CONSTCONST_HANDLER(3, ZEND_MUL, CONST|TMPVARCV, CONST|TMPVARCV)
 {
 	USE_OPLINE
 	zval *op1, *op2, *result;
@@ -1304,6 +1306,10 @@ ZEND_VM_HANDLER(26, ZEND_ASSIGN_OP, VAR|CV, CONST|TMPVAR|CV, OP)
 				zend_binary_assign_op_typed_ref(ref, value OPLINE_CC EXECUTE_DATA_CC);
 				break;
 			}
+		}
+		if (UNEXPECTED(Z_TYPE_P(var_ptr) == IS_OBJECT)
+		 && zend_ugl_vec_assign_op(opline->extended_value, var_ptr, value)) {
+			break;
 		}
 		zend_binary_op(var_ptr, var_ptr, value OPLINE_CC);
 	} while (0);

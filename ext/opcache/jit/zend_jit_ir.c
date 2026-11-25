@@ -14385,14 +14385,16 @@ static int zend_jit_fetch_obj(zend_jit_ctx         *jit,
 	/* $v->x, $v->y, $v->z on a vec2/vec3: load the float component directly. The class is
 	 * checked at run time, everything else continues with the generic code below. */
 	if (!prop_info && !on_this && opline->opcode == ZEND_FETCH_OBJ_R
-	 && Z_STRLEN_P(member) == 1 && Z_STRVAL_P(member)[0] >= 'x' && Z_STRVAL_P(member)[0] <= 'z') {
-		uint8_t idx = (uint8_t) (Z_STRVAL_P(member)[0] - 'x');
+	 && Z_STRLEN_P(member) == 1
+	 && ((Z_STRVAL_P(member)[0] >= 'x' && Z_STRVAL_P(member)[0] <= 'z') || Z_STRVAL_P(member)[0] == 'w')) {
+		uint8_t idx = Z_STRVAL_P(member)[0] == 'w' ? 3 : (uint8_t) (Z_STRVAL_P(member)[0] - 'x');
 		ir_ref cls = ir_LOAD_A(ir_ADD_OFFSET(obj_ref, offsetof(zend_object, ce)));
 
-		for (int k = 0; k < 2; k++) {
-			zend_class_entry *vec_ce = k == 0 ? zend_ce_ugl_vec3 : zend_ce_ugl_vec2;
-			if (k == 1 && idx > 1) {
-				break;
+		for (int k = 0; k < 3; k++) {
+			/* vec4 has x..w, vec3 x..z, vec2 x..y */
+			zend_class_entry *vec_ce = k == 0 ? zend_ce_ugl_vec4 : (k == 1 ? zend_ce_ugl_vec3 : zend_ce_ugl_vec2);
+			if (idx >= 4 - k) {
+				continue;
 			}
 			ir_ref if_vec = ir_IF(ir_EQ(cls, ir_CONST_ADDR(vec_ce)));
 			ir_IF_TRUE(if_vec);

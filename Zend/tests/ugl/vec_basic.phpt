@@ -139,7 +139,7 @@ object(vec3)#%d (3) {
 }
 float(3.7416574954986572)
 TypeError: Game\len(): Argument #%d ($v) must be of type vec3, vec2 given, called in %s on line 24
-Error: Cannot modify vec3: vectors are immutable
+Error: Cannot modify vec3: values are immutable
 TypeError: Unsupported operand types: vec3 + vec2
 TypeError: Unsupported operand types: vec3 % int
 TypeError: Unsupported operand types: vec3 + string
