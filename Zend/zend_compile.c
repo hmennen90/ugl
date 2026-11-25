@@ -24,6 +24,7 @@
 #include "zend_attributes.h"
 #include "zend_compile.h"
 #include "zend_ugl_vec.h"
+#include "zend_ugl_profile.h"
 #include "zend_constants.h"
 #include "zend_llist.h"
 #include "zend_API.h"
@@ -7028,6 +7029,30 @@ static void zend_compile_declare(zend_ast *ast) /* {{{ */
 				zend_error_noreturn(E_COMPILE_ERROR, "Encoding declaration pragma must be "
 					"the very first statement in the script");
 			}
+#ifdef ZEND_UGL
+		} else if (zend_string_equals_literal_ci(name, "kind")) {
+			zval value_zv;
+			zend_ugl_profile profile;
+
+			if (FAILURE == zend_is_first_statement(ast, /* allow_nop */ true)) {
+				zend_error_noreturn(E_COMPILE_ERROR, "kind declaration must be "
+					"the very first statement in the script");
+			}
+
+			if (ast->child[1] != NULL) {
+				zend_error_noreturn(E_COMPILE_ERROR, "kind declaration must not "
+					"use block mode");
+			}
+
+			zend_const_expr_to_zval(&value_zv, value_ast_ptr, /* allow_dynamic */ false);
+
+			if (Z_TYPE(value_zv) != IS_STRING || !zend_ugl_profile_from_string(Z_STR(value_zv), &profile)) {
+				zend_error_noreturn(E_COMPILE_ERROR, "kind declaration must have one of the values "
+					"'logic', 'common', 'data' or 'shader'");
+			}
+			zval_ptr_dtor_nogc(&value_zv);
+			zend_ugl_check_profile(CG(ast), profile);
+#endif
 		} else if (zend_string_equals_literal_ci(name, "strict_types")) {
 			zval value_zv;
 
