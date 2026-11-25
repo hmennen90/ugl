@@ -4458,6 +4458,12 @@ ZEND_VM_COLD_CONST_HANDLER(124, ZEND_VERIFY_RETURN_TYPE, CONST|TMP|VAR|UNUSED|CV
 			ZEND_VM_NEXT_OPCODE();
 		}
 
+		if (UNEXPECTED(ZEND_TYPE_FULL_MASK(ret_info->type) & _ZEND_TYPE_UGL_SCALAR_MASK)
+		 && retval_ref == retval_ptr
+		 && zend_ugl_check_fast(ZEND_TYPE_FULL_MASK(ret_info->type), retval_ptr)) {
+			ZEND_VM_NEXT_OPCODE();
+		}
+
 		if (OP1_TYPE == IS_CV && UNEXPECTED(Z_ISUNDEF_P(retval_ptr))) {
 			SAVE_OPLINE();
 			retval_ref = retval_ptr = ZVAL_UNDEFINED_OP1();
