@@ -7276,7 +7276,7 @@ static zend_type zend_compile_typename_ex(
 		for (uint32_t i = 0; i < list->children; i++) {
 			zend_ast *type_ast = list->child[i];
 			zend_type single_type;
-			uint32_t type_mask = ZEND_TYPE_FULL_MASK(type);
+			zend_type_mask_t type_mask = ZEND_TYPE_FULL_MASK(type);
 
 			if (type_ast->kind == ZEND_AST_TYPE_INTERSECTION) {
 				has_only_iterable_class = false;
@@ -7371,7 +7371,7 @@ static zend_type zend_compile_typename_ex(
 
 		free_alloca(type_list, use_heap);
 
-		uint32_t type_mask = ZEND_TYPE_FULL_MASK(type);
+		zend_type_mask_t type_mask = ZEND_TYPE_FULL_MASK(type);
 		if ((type_mask & MAY_BE_OBJECT) &&
 				((!has_only_iterable_class && ZEND_TYPE_IS_COMPLEX(type)) || (type_mask & MAY_BE_STATIC))) {
 			zend_string *type_str = zend_type_to_string(type);
@@ -7914,8 +7914,10 @@ static void zend_compile_params(zend_ast *ast, zend_ast *return_type_ast, uint32
 			| (is_promoted ? _ZEND_IS_PROMOTED_BIT : 0);
 		ZEND_TYPE_FULL_MASK(arg_info->type) |= arg_info_flags;
 		if (opcode == ZEND_RECV) {
+			/* RECV only sees the low 32 bits of the mask. Built-in types above
+			 * bit 31 must not be checked via op2.num. */
 			opline->op2.num = type_ast ?
-				ZEND_TYPE_FULL_MASK(arg_info->type) : MAY_BE_ANY;
+				(uint32_t) ZEND_TYPE_FULL_MASK(arg_info->type) : MAY_BE_ANY;
 		}
 
 		if (is_promoted) {

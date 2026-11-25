@@ -127,14 +127,23 @@ typedef void (*copy_ctor_func_t)(zval *pElement);
  * ZEND_TYPE_INIT_*() should be used for construction.
  */
 
+/* 64-bit mask: the upper 32 bits are free for built-in types beyond IS_NEVER.
+ * Uses the padding that zend_type already had on 64-bit systems. */
+#if SIZEOF_SIZE_T < 8
+# error "zend_type_mask_t requires a 64-bit platform"
+#endif
+typedef uint64_t zend_type_mask_t;
+#define _ZEND_TYPE_BIT(n) (((zend_type_mask_t) 1) << (n))
+
 typedef struct {
 	/* Not using a union here, because there's no good way to initialize them
 	 * in a way that is supported in both C and C++ (designated initializers
 	 * are only supported since C++20). */
 	void *ptr;
-	uint32_t type_mask;
-	/* TODO: We could use the extra 32-bit of padding on 64-bit systems. */
+	zend_type_mask_t type_mask;
 } zend_type;
+
+ZEND_STATIC_ASSERT(sizeof(zend_type) == 2 * sizeof(void *), "zend_type must stay two words");
 
 typedef struct {
 	uint32_t num_types;
@@ -142,25 +151,25 @@ typedef struct {
 } zend_type_list;
 
 #define _ZEND_TYPE_EXTRA_FLAGS_SHIFT 25
-#define _ZEND_TYPE_MASK ((1u << 25) - 1)
+#define _ZEND_TYPE_MASK (_ZEND_TYPE_BIT(25) - 1)
 /* Only one of these bits may be set. */
-#define _ZEND_TYPE_NAME_BIT (1u << 24)
+#define _ZEND_TYPE_NAME_BIT _ZEND_TYPE_BIT(24)
 // Used to signify that type.ptr is not a `zend_string*` but a `const char*`,
-#define _ZEND_TYPE_LITERAL_NAME_BIT (1u << 23)
-#define _ZEND_TYPE_LIST_BIT (1u << 22)
+#define _ZEND_TYPE_LITERAL_NAME_BIT _ZEND_TYPE_BIT(23)
+#define _ZEND_TYPE_LIST_BIT _ZEND_TYPE_BIT(22)
 #define _ZEND_TYPE_KIND_MASK (_ZEND_TYPE_LIST_BIT|_ZEND_TYPE_NAME_BIT|_ZEND_TYPE_LITERAL_NAME_BIT)
 /* For BC behaviour with iterable type */
-#define _ZEND_TYPE_ITERABLE_BIT (1u << 21)
+#define _ZEND_TYPE_ITERABLE_BIT _ZEND_TYPE_BIT(21)
 /* Whether the type list is arena allocated */
-#define _ZEND_TYPE_ARENA_BIT (1u << 20)
+#define _ZEND_TYPE_ARENA_BIT _ZEND_TYPE_BIT(20)
 /* Whether the type list is an intersection type */
-#define _ZEND_TYPE_INTERSECTION_BIT (1u << 19)
+#define _ZEND_TYPE_INTERSECTION_BIT _ZEND_TYPE_BIT(19)
 /* Whether the type is a union type */
-#define _ZEND_TYPE_UNION_BIT (1u << 18)
+#define _ZEND_TYPE_UNION_BIT _ZEND_TYPE_BIT(18)
 /* Type mask excluding the flags above. */
-#define _ZEND_TYPE_MAY_BE_MASK ((1u << 18) - 1)
+#define _ZEND_TYPE_MAY_BE_MASK (_ZEND_TYPE_BIT(18) - 1)
 /* Must have same value as MAY_BE_NULL */
-#define _ZEND_TYPE_NULLABLE_BIT 0x2u
+#define _ZEND_TYPE_NULLABLE_BIT _ZEND_TYPE_BIT(1)
 
 #define ZEND_TYPE_IS_SET(t) \
 	(((t).type_mask & _ZEND_TYPE_MASK) != 0)
@@ -284,7 +293,7 @@ typedef struct {
 	((t).type_mask & _ZEND_TYPE_MAY_BE_MASK & ~_ZEND_TYPE_NULLABLE_BIT)
 
 #define ZEND_TYPE_CONTAINS_CODE(t, code) \
-	(((t).type_mask & (1u << (code))) != 0)
+	(((t).type_mask & _ZEND_TYPE_BIT(code)) != 0)
 
 #define ZEND_TYPE_ALLOW_NULL(t) \
 	(((t).type_mask & _ZEND_TYPE_NULLABLE_BIT) != 0)
@@ -304,7 +313,7 @@ typedef struct {
 	_ZEND_TYPE_PREFIX { NULL, (_type_mask) }
 
 #define ZEND_TYPE_INIT_CODE(code, allow_null, extra_flags) \
-	ZEND_TYPE_INIT_MASK(((code) == _IS_BOOL ? MAY_BE_BOOL : ( (code) == IS_ITERABLE ? _ZEND_TYPE_ITERABLE_BIT : ((code) == IS_MIXED ? MAY_BE_ANY : (1 << (code))))) \
+	ZEND_TYPE_INIT_MASK(((code) == _IS_BOOL ? MAY_BE_BOOL : ( (code) == IS_ITERABLE ? _ZEND_TYPE_ITERABLE_BIT : ((code) == IS_MIXED ? MAY_BE_ANY : _ZEND_TYPE_BIT(code)))) \
 		| ((allow_null) ? _ZEND_TYPE_NULLABLE_BIT : 0) | (extra_flags))
 
 #define ZEND_TYPE_INIT_PTR(ptr, type_kind, allow_null, extra_flags) \

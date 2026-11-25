@@ -730,7 +730,7 @@ ZEND_API ZEND_COLD void zend_verify_arg_error(
 	zend_string_release(need_msg);
 }
 
-static bool zend_verify_weak_scalar_type_hint(uint32_t type_mask, zval *arg)
+static bool zend_verify_weak_scalar_type_hint(zend_type_mask_t type_mask, zval *arg)
 {
 	zend_long lval;
 	double dval;
@@ -791,7 +791,7 @@ static bool can_convert_to_string(const zval *zv) {
 }
 
 /* Used to sanity-check internal arginfo types without performing any actual type conversions. */
-static bool zend_verify_weak_scalar_type_hint_no_sideeffect(uint32_t type_mask, const zval *arg)
+static bool zend_verify_weak_scalar_type_hint_no_sideeffect(zend_type_mask_t type_mask, const zval *arg)
 {
 	zend_long lval;
 	double dval;
@@ -815,7 +815,7 @@ static bool zend_verify_weak_scalar_type_hint_no_sideeffect(uint32_t type_mask, 
 }
 #endif
 
-ZEND_API bool zend_verify_scalar_type_hint(uint32_t type_mask, zval *arg, bool strict, bool is_internal_arg)
+ZEND_API bool zend_verify_scalar_type_hint(zend_type_mask_t type_mask, zval *arg, bool strict, bool is_internal_arg)
 {
 	if (UNEXPECTED(strict)) {
 		/* SSTH Exception: IS_LONG may be accepted as IS_DOUBLE (converted) */
@@ -1049,7 +1049,7 @@ static zend_always_inline bool i_zend_check_property_type(const zend_property_in
 		return 1;
 	}
 
-	uint32_t type_mask = ZEND_TYPE_FULL_MASK(info->type);
+	zend_type_mask_t type_mask = ZEND_TYPE_FULL_MASK(info->type);
 	ZEND_ASSERT(!(type_mask & (MAY_BE_CALLABLE|MAY_BE_STATIC|MAY_BE_NEVER|MAY_BE_VOID)));
 	return zend_verify_scalar_type_hint(type_mask, property, strict, 0);
 }
@@ -1185,7 +1185,7 @@ static zend_always_inline bool zend_check_type_slow(
 		}
 	}
 
-	const uint32_t type_mask = ZEND_TYPE_FULL_MASK(*type);
+	const zend_type_mask_t type_mask = ZEND_TYPE_FULL_MASK(*type);
 	if ((type_mask & MAY_BE_CALLABLE) &&
 		zend_is_callable(arg, is_internal ? IS_CALLABLE_SUPPRESS_DEPRECATIONS : 0, NULL)) {
 		return 1;
@@ -1516,7 +1516,7 @@ static zend_always_inline bool zend_check_class_constant_type(const zend_class_c
 		return 1;
 	}
 
-	uint32_t type_mask = ZEND_TYPE_FULL_MASK(c->type);
+	zend_type_mask_t type_mask = ZEND_TYPE_FULL_MASK(c->type);
 	ZEND_ASSERT(!(type_mask & (MAY_BE_CALLABLE|MAY_BE_NEVER|MAY_BE_VOID)));
 	return zend_verify_scalar_type_hint(type_mask, constant, true, false);
 }
@@ -3919,7 +3919,7 @@ ZEND_API ZEND_COLD void zend_throw_conflicting_coercion_error(const zend_propert
 static zend_always_inline int i_zend_verify_type_assignable_zval(
 		const zend_property_info *info, const zval *zv, bool strict) {
 	zend_type type = info->type;
-	uint32_t type_mask;
+	zend_type_mask_t type_mask;
 	uint8_t zv_type = Z_TYPE_P(zv);
 
 	if (EXPECTED(ZEND_TYPE_CONTAINS_CODE(type, zv_type))) {
