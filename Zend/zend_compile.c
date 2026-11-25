@@ -265,6 +265,7 @@ static const builtin_type_info builtin_types[] = {
 	{ZEND_STRL("false"), IS_FALSE},
 	{ZEND_STRL("int"), IS_LONG},
 	{ZEND_STRL("float"), IS_DOUBLE},
+	{ZEND_STRL("float32"), _IS_FLOAT32},
 	{ZEND_STRL("string"), IS_STRING},
 	{ZEND_STRL("bool"), _IS_BOOL},
 	{ZEND_STRL("void"), IS_VOID},
@@ -1488,6 +1489,10 @@ zend_string *zend_type_to_string_resolved(const zend_type type, zend_class_entry
 	}
 	if (type_mask & MAY_BE_DOUBLE) {
 		str = add_type_string(str, ZSTR_KNOWN(ZEND_STR_FLOAT), /* is_intersection */ false);
+	}
+	if (ZEND_TYPE_FULL_MASK(type) & MAY_BE_FLOAT32) {
+		zend_string *name = zend_string_init_interned("float32", sizeof("float32") - 1, true);
+		str = add_type_string(str, name, /* is_intersection */ false);
 	}
 	if ((type_mask & MAY_BE_BOOL) == MAY_BE_BOOL) {
 		str = add_type_string(str, ZSTR_KNOWN(ZEND_STR_BOOL), /* is_intersection */ false);
@@ -7332,7 +7337,8 @@ static zend_type zend_compile_typename_ex(
 				zend_error_noreturn(E_COMPILE_ERROR,
 					"Type contains both true and false, bool must be used instead");
 			}
-			ZEND_TYPE_FULL_MASK(type) |= ZEND_TYPE_PURE_MASK(single_type);
+			ZEND_TYPE_FULL_MASK(type) |= ZEND_TYPE_PURE_MASK(single_type)
+				| (ZEND_TYPE_FULL_MASK(single_type) & _ZEND_TYPE_BUILTIN_MASK);
 			/* Clear MAY_BE_* type flags */
 			ZEND_TYPE_FULL_MASK(single_type) &= ~_ZEND_TYPE_MAY_BE_MASK;
 
@@ -7494,6 +7500,13 @@ static bool zend_is_valid_default_value(zend_type type, zval *value)
 {
 	ZEND_ASSERT(ZEND_TYPE_IS_SET(type));
 	if (ZEND_TYPE_CONTAINS_CODE(type, Z_TYPE_P(value))) {
+		return 1;
+	}
+	if ((ZEND_TYPE_FULL_MASK(type) & MAY_BE_FLOAT32)
+			&& (Z_TYPE_P(value) == IS_DOUBLE || Z_TYPE_P(value) == IS_LONG)) {
+		/* float32 initializers are rounded to single precision at compile time. */
+		double d = Z_TYPE_P(value) == IS_LONG ? (double) Z_LVAL_P(value) : Z_DVAL_P(value);
+		ZVAL_DOUBLE(value, (double) (float) d);
 		return 1;
 	}
 	if ((ZEND_TYPE_FULL_MASK(type) & MAY_BE_DOUBLE) && Z_TYPE_P(value) == IS_LONG) {

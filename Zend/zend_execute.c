@@ -737,6 +737,24 @@ static bool zend_verify_weak_scalar_type_hint(zend_type_mask_t type_mask, zval *
 	zend_string *str;
 	bool bval;
 
+	if (UNEXPECTED(type_mask & MAY_BE_FLOAT32)) {
+		/* float32: values stay IS_DOUBLE, but are rounded to single precision. */
+		if (Z_TYPE_P(arg) == IS_DOUBLE) {
+			ZVAL_DOUBLE(arg, (double) (float) Z_DVAL_P(arg));
+			return 1;
+		}
+		if (Z_TYPE_P(arg) == IS_LONG) {
+			ZVAL_DOUBLE(arg, (double) (float) Z_LVAL_P(arg));
+			return 1;
+		}
+		bool ok = zend_verify_weak_scalar_type_hint(
+			(type_mask & ~MAY_BE_FLOAT32) | MAY_BE_DOUBLE, arg);
+		if (ok && Z_TYPE_P(arg) == IS_DOUBLE) {
+			ZVAL_DOUBLE(arg, (double) (float) Z_DVAL_P(arg));
+		}
+		return ok;
+	}
+
 	/* Type preference order: int -> float -> string -> bool */
 	if (type_mask & MAY_BE_LONG) {
 		/* For an int|float union type and string value,
@@ -797,6 +815,10 @@ static bool zend_verify_weak_scalar_type_hint_no_sideeffect(zend_type_mask_t typ
 	double dval;
 	bool bval;
 
+	if (type_mask & MAY_BE_FLOAT32) {
+		type_mask = (type_mask & ~MAY_BE_FLOAT32) | MAY_BE_DOUBLE;
+	}
+
 	/* Pass (uint32_t)-1 as arg_num to indicate to ZPP not to emit any deprecation notice,
 	 * this is needed because the version with side effects also uses 0 (e.g. for typed properties) */
 	if ((type_mask & MAY_BE_LONG) && zend_parse_arg_long_weak(arg, &lval, (uint32_t)-1)) {
@@ -818,15 +840,17 @@ static bool zend_verify_weak_scalar_type_hint_no_sideeffect(zend_type_mask_t typ
 ZEND_API bool zend_verify_scalar_type_hint(zend_type_mask_t type_mask, zval *arg, bool strict, bool is_internal_arg)
 {
 	if (UNEXPECTED(strict)) {
-		/* SSTH Exception: IS_LONG may be accepted as IS_DOUBLE (converted) */
-		if (!(type_mask & MAY_BE_DOUBLE) || Z_TYPE_P(arg) != IS_LONG) {
+		/* SSTH Exception: IS_LONG may be accepted as IS_DOUBLE (converted).
+		 * float32 also takes float (rounded) and int in strict mode. */
+		if (!((type_mask & MAY_BE_DOUBLE) && Z_TYPE_P(arg) == IS_LONG)
+		 && !((type_mask & MAY_BE_FLOAT32) && (Z_TYPE_P(arg) == IS_LONG || Z_TYPE_P(arg) == IS_DOUBLE))) {
 			return 0;
 		}
 	} else if (UNEXPECTED(Z_TYPE_P(arg) == IS_NULL)) {
 		/* NULL may be accepted only by nullable hints (this is already checked).
 		 * As an exception for internal functions, null is allowed for scalar types in weak mode. */
 		return is_internal_arg
-			&& (type_mask & (MAY_BE_TRUE|MAY_BE_FALSE|MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING));
+			&& (type_mask & (MAY_BE_TRUE|MAY_BE_FALSE|MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING|MAY_BE_FLOAT32));
 	}
 #if ZEND_DEBUG
 	if (is_internal_arg) {
@@ -1194,7 +1218,12 @@ static zend_always_inline bool zend_check_type_slow(
 		return 1;
 	}
 	if (ref && ZEND_REF_HAS_TYPE_SOURCES(ref)) {
-		/* We cannot have conversions for typed refs. */
+		/* We cannot have conversions for typed refs. A float32 reference only
+		 * accepts values that are exactly representable in single precision. */
+		if ((type_mask & MAY_BE_FLOAT32) && Z_TYPE_P(arg) == IS_DOUBLE) {
+			double d = Z_DVAL_P(arg);
+			return d != d || (double) (float) d == d;
+		}
 		return 0;
 	}
 	if (is_internal && is_return_type) {
@@ -3936,7 +3965,8 @@ static zend_always_inline int i_zend_verify_type_assignable_zval(
 
 	/* SSTH Exception: IS_LONG may be accepted as IS_DOUBLE (converted) */
 	if (strict) {
-		if ((type_mask & MAY_BE_DOUBLE) && zv_type == IS_LONG) {
+		if (((type_mask & MAY_BE_DOUBLE) && zv_type == IS_LONG)
+		 || ((type_mask & MAY_BE_FLOAT32) && (zv_type == IS_LONG || zv_type == IS_DOUBLE))) {
 			return -1;
 		}
 		return 0;
@@ -3948,7 +3978,7 @@ static zend_always_inline int i_zend_verify_type_assignable_zval(
 	}
 
 	/* Does not contain any type to which a coercion is possible */
-	if (!(type_mask & (MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING))
+	if (!(type_mask & (MAY_BE_LONG|MAY_BE_DOUBLE|MAY_BE_STRING|MAY_BE_FLOAT32))
 			&& (type_mask & MAY_BE_BOOL) != MAY_BE_BOOL) {
 		return 0;
 	}

@@ -151,7 +151,11 @@ typedef struct {
 } zend_type_list;
 
 #define _ZEND_TYPE_EXTRA_FLAGS_SHIFT 25
-#define _ZEND_TYPE_MASK (_ZEND_TYPE_BIT(25) - 1)
+/* Declaration-only built-in types live in the upper 32 bits (no IS_* code, no zval type). */
+#define _ZEND_TYPE_BUILTIN_MASK (~(zend_type_mask_t) 0 << 32)
+#define _IS_FLOAT32 32
+#define MAY_BE_FLOAT32 _ZEND_TYPE_BIT(_IS_FLOAT32)
+#define _ZEND_TYPE_MASK ((_ZEND_TYPE_BIT(25) - 1) | _ZEND_TYPE_BUILTIN_MASK)
 /* Only one of these bits may be set. */
 #define _ZEND_TYPE_NAME_BIT _ZEND_TYPE_BIT(24)
 // Used to signify that type.ptr is not a `zend_string*` but a `const char*`,
