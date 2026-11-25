@@ -63,7 +63,9 @@ keeps the line numbers (the tools in `ugl-tools` do this). Composer's PSR-4 load
 ## What differs from the base language
 
 - `strict_types` is always on; `declare(strict_types=0)` is a compile error.
-- `float32`, `int32`, `vec2`, `vec3`, `vec4`, `mat4` are reserved names.
+- `float32`, `int32`, `vec2`, `vec3`, `vec4`, `mat4` are reserved names. `vec2`, `vec3`, `vec4` and
+  `mat4` mean the built-in types only in exactly this lower-case spelling, so a user class
+  `App\Math\Vec3` keeps working (class names are case-insensitive otherwise).
 - `declare(kind='logic'|'common'|'data'|'shader')` restricts a file (`Zend/zend_ugl_profile.c`).
 - `*` no longer swaps its operands for some operand type combinations, so that
   `mat4 * vec4` and `vec4 * mat4` differ. Error messages of `*` name the operands in source order.

@@ -375,11 +375,15 @@ static void ugl_check_new(ugl_ctx *c, zend_ast *ast)
 	}
 	zend_string *name = Z_STR_P(zend_ast_get_zval(cls));
 	zend_string *low = ugl_short_lower(name);
+	const char *last = zend_memrchr(ZSTR_VAL(name), '\\', ZSTR_LEN(name));
+	zend_string *short_name = last ? zend_string_init(last + 1, ZSTR_VAL(name) + ZSTR_LEN(name) - (last + 1), 0)
+		: zend_string_copy(name);
 	bool ok = zend_hash_exists(&c->value_classes, low)
-		|| zend_is_ugl_class_name(low)
+		|| zend_is_ugl_class_name(short_name)
 		|| zend_string_equals_literal(low, "self")
 		|| zend_string_equals_literal(low, "static");
 	zend_string_release(low);
+	zend_string_release(short_name);
 	if (!ok) {
 		ugl_fail(c, ast, "Heap objects (new of anything but a final readonly class of this file, vec2/vec3/vec4/mat4) are");
 	}

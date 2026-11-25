@@ -1049,11 +1049,13 @@ static const zend_function_entry ugl_mat4_methods[] = {
 
 ZEND_API bool zend_is_ugl_class_name(const zend_string *name)
 {
+	/* Exactly the lower-case spellings: class names are case-insensitive, so a user class
+	 * such as App\Math\Vec3 must keep resolving to itself. */
 	return ZSTR_LEN(name) == 4
-		&& (zend_binary_strcasecmp(ZSTR_VAL(name), 4, "vec2", 4) == 0
-		 || zend_binary_strcasecmp(ZSTR_VAL(name), 4, "vec3", 4) == 0
-		 || zend_binary_strcasecmp(ZSTR_VAL(name), 4, "vec4", 4) == 0
-		 || zend_binary_strcasecmp(ZSTR_VAL(name), 4, "mat4", 4) == 0);
+		&& (memcmp(ZSTR_VAL(name), "vec2", 4) == 0
+		 || memcmp(ZSTR_VAL(name), "vec3", 4) == 0
+		 || memcmp(ZSTR_VAL(name), "vec4", 4) == 0
+		 || memcmp(ZSTR_VAL(name), "mat4", 4) == 0);
 }
 
 static zend_class_entry *ugl_register_class(const char *name, const zend_function_entry *methods,
