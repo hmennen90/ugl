@@ -245,6 +245,28 @@ ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zv
 	return true;
 }
 
+ZEND_API bool zend_ugl_vec_fetch_component(zend_object *obj, const zend_string *name, zval *result)
+{
+	if (obj->handlers != &ugl_vec_handlers || ZSTR_LEN(name) != 1) {
+		return false;
+	}
+	zend_ugl_vec *v = ugl_vec_from_obj(obj);
+	char ch = ZSTR_VAL(name)[0];
+	uint8_t idx;
+	if (ch == 'w') {
+		idx = 3;
+	} else if (ch >= 'x' && ch <= 'z') {
+		idx = (uint8_t) (ch - 'x');
+	} else {
+		return false;
+	}
+	if (idx >= v->dim) {
+		return false;
+	}
+	ZVAL_DOUBLE(result, v->c[idx]);
+	return true;
+}
+
 ZEND_API bool zend_ugl_vec_assign_op(uint8_t opcode, zval *var, zval *value)
 {
 	zend_ugl_vec *a, *b;

@@ -7026,6 +7026,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -9794,6 +9800,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -12377,6 +12389,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -16965,6 +16983,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -18481,6 +18505,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -19905,6 +19935,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -34904,6 +34940,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -37155,6 +37197,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -39848,6 +39896,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -44357,6 +44411,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -48456,6 +48516,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -54143,6 +54209,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -62876,6 +62948,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -65644,6 +65722,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -68125,6 +68209,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -72713,6 +72803,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -74229,6 +74325,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -75553,6 +75655,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -90552,6 +90660,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -92803,6 +92917,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -95496,6 +95616,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -100005,6 +100131,12 @@ fetch_obj_r_fast_copy:
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
 #endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
+#endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
 		if (!EG(exception) && prop_info && prop_info != ZEND_WRONG_PROPERTY_INFO
@@ -104104,6 +104236,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG
@@ -109689,6 +109827,12 @@ fetch_obj_r_fast_copy:
 		if (zobj->handlers->read_property != zend_std_read_property) {
 			prop_info = zend_get_property_info(zobj->ce, name, /* silent */ true);
 		}
+#endif
+#ifdef ZEND_UGL
+		/* $v->x of a vector: no property lookup, no handler call. */
+		if (UNEXPECTED(zend_ugl_vec_fetch_component(zobj, name, EX_VAR(opline->result.var)))) {
+			retval = EX_VAR(opline->result.var);
+		} else
 #endif
 		retval = zobj->handlers->read_property(zobj, name, BP_VAR_R, cache_slot, EX_VAR(opline->result.var));
 #if ZEND_DEBUG

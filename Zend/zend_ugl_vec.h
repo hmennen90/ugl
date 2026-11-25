@@ -60,6 +60,9 @@ ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zv
  * possible (shared vector, other operand types, ...), the generic path then runs. */
 ZEND_API bool zend_ugl_vec_assign_op(uint8_t opcode, zval *var, zval *value);
 
+/* ZEND_FETCH_OBJ_R: $v->x, ->y, ->z, ->w of a vector without the property machinery. */
+ZEND_API bool zend_ugl_vec_fetch_component(zend_object *obj, const zend_string *name, zval *result);
+
 END_EXTERN_C()
 
 /* "$p = $p <op> x": the opcode after the arithmetic assigns its result to the variable
@@ -80,6 +83,11 @@ END_EXTERN_C()
 # define ZEND_UGL_OP1_ASSIGN 4
 
 static zend_always_inline bool zend_ugl_vec_assign_op(uint8_t opcode, zval *var, zval *value)
+{
+	return false;
+}
+
+static zend_always_inline bool zend_ugl_vec_fetch_component(zend_object *obj, const zend_string *name, zval *result)
 {
 	return false;
 }
