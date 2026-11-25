@@ -1,0 +1,4 @@
+function lib_value(): int
+{
+    return 7;
+}

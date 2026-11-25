@@ -29,6 +29,25 @@ Without `--enable-ugl` the same tree builds the base language unchanged, except 
 changes that are not switchable: the 64-bit `zend_type.type_mask` and the missing operand
 swap for `*` (see below). Such a build is only meant for running the unmodified test suites.
 
+## Source files
+
+UGL code lives in `.ugl` files. A `.ugl` file is code from the first byte: there is no opening tag
+(`<?php`, `<?ugl` and `<?=` do not exist), no closing tag and no inline text. A first line starting with
+`#!` is skipped, so scripts can be executable. The extension decides, also for `include` and `require`
+from other files; `.php` files keep the opening tag and the old behaviour. An opening tag in a `.ugl`
+file is a compile error.
+
+    declare(kind='common');
+
+    function twice(int $x): int
+    {
+        return $x * 2;
+    }
+
+Tools that parse PHP read a `.ugl` file by putting `<?php ` in front of it without a line break, which
+keeps the line numbers (the tools in `ugl-tools` do this). Composer's PSR-4 loader and classmap look for
+`.php` files; `.ugl` classes need their own autoloader or a `files` entry.
+
 ## What differs from the base language
 
 - `strict_types` is always on; `declare(strict_types=0)` is a compile error.

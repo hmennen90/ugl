@@ -1,0 +1,8 @@
+declare(kind='common');
+
+function twice(int $x): int
+{
+    return $x * 2;
+}
+
+echo twice(21);

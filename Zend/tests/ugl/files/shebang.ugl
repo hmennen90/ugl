@@ -1,0 +1,2 @@
+#!/usr/bin/env ugl
+echo __LINE__;

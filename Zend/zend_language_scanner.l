@@ -567,16 +567,39 @@ ZEND_API zend_result open_file_for_scanning(zend_file_handle *file_handle)
 		zend_error_noreturn(E_COMPILE_ERROR, "zend_stream_mmap() failed");
 	}
 
-	if (CG(skip_shebang)) {
-		BEGIN(SHEBANG);
-	} else {
-		BEGIN(INITIAL);
-	}
-
 	if (file_handle->opened_path) {
 		compiled_filename = zend_string_copy(file_handle->opened_path);
 	} else {
 		compiled_filename = zend_string_copy(file_handle->filename);
+	}
+
+	uint32_t first_line = 1;
+#ifdef ZEND_UGL
+	bool ugl_file = false;
+	/* A .ugl file is code from the first byte: there is no opening tag and no inline text.
+	 * A shebang line is skipped here, the SHEBANG state would continue in the text mode. */
+	if (ZSTR_LEN(compiled_filename) >= 4
+	 && memcmp(ZSTR_VAL(compiled_filename) + ZSTR_LEN(compiled_filename) - 4, ".ugl", 4) == 0) {
+		if (CG(skip_shebang) && size != (size_t)-1 && size >= 2 && buf[0] == '#' && buf[1] == '!') {
+			while (YYCURSOR < YYLIMIT && *YYCURSOR != '\n' && *YYCURSOR != '\r') {
+				YYCURSOR++;
+			}
+			if (YYCURSOR < YYLIMIT && *YYCURSOR == '\r' && YYCURSOR + 1 < YYLIMIT && YYCURSOR[1] == '\n') {
+				YYCURSOR++;
+			}
+			if (YYCURSOR < YYLIMIT) {
+				YYCURSOR++;
+			}
+			first_line = 2;
+		}
+		ugl_file = true;
+		BEGIN(ST_IN_SCRIPTING);
+	} else
+#endif
+	if (CG(skip_shebang)) {
+		BEGIN(SHEBANG);
+	} else {
+		BEGIN(INITIAL);
 	}
 
 	zend_set_compiled_filename(compiled_filename);
@@ -585,8 +608,14 @@ ZEND_API zend_result open_file_for_scanning(zend_file_handle *file_handle)
 	SCNG(on_event) = NULL;
 	SCNG(on_event_context) = NULL;
 	RESET_DOC_COMMENT();
-	CG(zend_lineno) = 1;
+	CG(zend_lineno) = first_line;
 	CG(increment_lineno) = 0;
+#ifdef ZEND_UGL
+	if (ugl_file && YYCURSOR + 1 < YYLIMIT && YYCURSOR[0] == '<' && YYCURSOR[1] == '?') {
+		zend_error_at_noreturn(E_COMPILE_ERROR, zend_get_compiled_filename(), first_line,
+			"A .ugl file is code from the first byte: remove the opening tag");
+	}
+#endif
 	return SUCCESS;
 }
 
