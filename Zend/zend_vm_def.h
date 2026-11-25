@@ -2861,7 +2861,7 @@ ZEND_VM_HANDLER(22, ZEND_ASSIGN, VAR|CV, CONST|TMP|VAR|CV, SPEC(RETVAL))
 	value = GET_OP2_ZVAL_PTR(BP_VAR_R);
 	variable_ptr = GET_OP1_ZVAL_PTR_PTR_UNDEF(BP_VAR_W);
 
-	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX) && variable_ptr != value) {
 		/* UGL: the old vector goes straight back to the pool */
 		zend_ugl_vec_release_slot(variable_ptr);
 	}
