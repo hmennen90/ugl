@@ -215,22 +215,65 @@ static zend_always_inline void ugl_vec_recycle(zval *zv)
 #endif
 }
 
-ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags)
+ZEND_API void zend_ugl_vec_release_slot(zval *var)
+{
+	if (ugl_is_vec(var)) {
+		ugl_vec_recycle(var);
+	}
+}
+
+/* Both operands are vectors of the same size: the operator is chosen once, outside the
+ * component loop, and the common sizes are written out. */
+static zend_always_inline bool ugl_vec_vec_fast(uint8_t opcode, const zend_ugl_vec *a, const zend_ugl_vec *b, float *r)
+{
+#define UGL_FAST(OP) \
+	r[0] = a->c[0] OP b->c[0]; \
+	r[1] = a->c[1] OP b->c[1]; \
+	if (a->dim >= 3) { \
+		r[2] = a->c[2] OP b->c[2]; \
+		if (a->dim == 4) { \
+			r[3] = a->c[3] OP b->c[3]; \
+		} \
+	} \
+	return true;
+	switch (opcode) {
+		case ZEND_ADD: UGL_FAST(+)
+		case ZEND_SUB: UGL_FAST(-)
+		case ZEND_MUL: UGL_FAST(*)
+		case ZEND_DIV: UGL_FAST(/)
+	}
+#undef UGL_FAST
+	return false;
+}
+
+ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags, zval *target)
 {
 	zend_ugl_vec *a, *b;
 	float r[4];
 	uint8_t dim;
 
-	if (!ugl_binop_eval(opcode, op1, op2, &a, &b, r, &dim)) {
+	if (EXPECTED(ugl_is_vec(op1) && ugl_is_vec(op2)
+	 && (a = ugl_vec_from_obj(Z_OBJ_P(op1)))->dim == (b = ugl_vec_from_obj(Z_OBJ_P(op2)))->dim)) {
+		if (!ugl_vec_vec_fast(opcode, a, b, r)) {
+			return false;
+		}
+		dim = a->dim;
+	} else if (!ugl_binop_eval(opcode, op1, op2, &a, &b, r, &dim)) {
 		return false;
 	}
 
-	/* A temporary that only this opcode references (or the variable the next opcode
-	 * assigns the result to) can hold the result. The result slot must not alias an
-	 * operand, the caller still releases both operands. */
+	/* A vector nobody else references can hold the result: the variable the next opcode
+	 * assigns to, or a temporary that only this opcode references. The result slot must
+	 * not alias an operand, the caller still releases both operands. */
 	zend_ugl_vec *reuse = NULL;
-	if (result != op1 && result != op2) {
-		if ((flags & (ZEND_UGL_OP1_TMP|ZEND_UGL_OP1_ASSIGN)) && a && ugl_can_overwrite(a)) {
+	if (target && Z_TYPE_P(target) == IS_OBJECT && ugl_is_vec(target)) {
+		zend_ugl_vec *t = ugl_vec_from_obj(Z_OBJ_P(target));
+		if (t->dim == dim && ugl_can_overwrite(t)) {
+			reuse = t;
+		}
+	}
+	if (!reuse && result != op1 && result != op2) {
+		if ((flags & ZEND_UGL_OP1_TMP) && a && ugl_can_overwrite(a)) {
 			reuse = a;
 		} else if ((flags & ZEND_UGL_OP2_TMP) && b && ugl_can_overwrite(b)) {
 			reuse = b;

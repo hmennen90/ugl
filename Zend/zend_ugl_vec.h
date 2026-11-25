@@ -53,8 +53,13 @@ ZEND_API bool zend_is_ugl_class_name(const zend_string *name);
  * operand that nobody else references is reused for the result. */
 #define ZEND_UGL_OP1_TMP    1  /* op1 is a TMP/VAR the caller releases after the opcode */
 #define ZEND_UGL_OP2_TMP    2  /* op2 is a TMP/VAR the caller releases after the opcode */
-#define ZEND_UGL_OP1_ASSIGN 4  /* op1 is a CV that the next opcode overwrites with the result */
-ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags);
+/* target: the CV the next opcode assigns the result to (see ZEND_UGL_ASSIGN_TARGET), or NULL.
+ * A vector of the same size that only that variable references takes the result. */
+ZEND_API bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags, zval *target);
+
+/* ZEND_ASSIGN: if the variable holds a vector nobody else references, return it to the
+ * pool before the variable is overwritten. Leaves the variable alone otherwise. */
+ZEND_API void zend_ugl_vec_release_slot(zval *var);
 
 /* ZEND_ASSIGN_OP: updates a vector in place for $p op= x. Returns false if that is not
  * possible (shared vector, other operand types, ...), the generic path then runs. */
@@ -65,22 +70,20 @@ ZEND_API bool zend_ugl_vec_fetch_component(zend_object *obj, const zend_string *
 
 END_EXTERN_C()
 
-/* "$p = $p <op> x": the opcode after the arithmetic assigns its result to the variable
- * that was the left operand, so that variable's old value is dead afterwards. */
-# define ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) \
-	((opline)->op1_type == IS_CV \
-	 && ((opline) + 1)->opcode == ZEND_ASSIGN \
-	 && ((opline) + 1)->op1_type == IS_CV \
-	 && ((opline) + 1)->op1.var == (opline)->op1.var \
-	 && ((opline) + 1)->op2_type == IS_TMP_VAR \
-	 && ((opline) + 1)->op2.var == (opline)->result.var)
+/* "$r = $a <op> $b": the opcode after the arithmetic assigns its result to a variable.
+ * Returns that variable's zval, or NULL. */
+# define ZEND_UGL_ASSIGN_TARGET(opline) \
+	((((opline) + 1)->opcode == ZEND_ASSIGN \
+	  && ((opline) + 1)->op1_type == IS_CV \
+	  && ((opline) + 1)->op2_type == IS_TMP_VAR \
+	  && ((opline) + 1)->op2.var == (opline)->result.var) \
+	 ? EX_VAR(((opline) + 1)->op1.var) : NULL)
 
 #else
 
-# define ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) 0
+# define ZEND_UGL_ASSIGN_TARGET(opline) NULL
 # define ZEND_UGL_OP1_TMP 1
 # define ZEND_UGL_OP2_TMP 2
-# define ZEND_UGL_OP1_ASSIGN 4
 
 static zend_always_inline bool zend_ugl_vec_assign_op(uint8_t opcode, zval *var, zval *value)
 {
@@ -92,9 +95,13 @@ static zend_always_inline bool zend_ugl_vec_fetch_component(zend_object *obj, co
 	return false;
 }
 
-static zend_always_inline bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags)
+static zend_always_inline bool zend_ugl_vec_binary_op(uint8_t opcode, zval *result, zval *op1, zval *op2, uint32_t flags, zval *target)
 {
 	return false;
+}
+
+static zend_always_inline void zend_ugl_vec_release_slot(zval *var)
+{
 }
 
 #endif /* ZEND_UGL */

@@ -470,8 +470,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_ADD, EX_VAR(opline->result.var), op_1, op_2,
 			((opline->op1_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		add_function(EX_VAR(opline->result.var), op_1, op_2);
@@ -499,8 +499,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_SUB, EX_VAR(opline->result.var), op_1, op_2,
 			((opline->op1_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		sub_function(EX_VAR(opline->result.var), op_1, op_2);
@@ -528,8 +528,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV_
 	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_MUL, EX_VAR(opline->result.var), op_1, op_2,
 			((opline->op1_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		mul_function(EX_VAR(opline->result.var), op_1, op_2);
@@ -6390,8 +6390,8 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -9468,8 +9468,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CONS
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -12052,8 +12052,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CONS
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -16307,8 +16307,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_TMPV
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			(((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -17836,8 +17836,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_TMPV
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			(((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -19623,8 +19623,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_TMPV
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			(((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -26062,6 +26062,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -26090,6 +26095,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	SAVE_OPLINE();
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -29787,6 +29797,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -29815,6 +29830,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	SAVE_OPLINE();
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -29889,6 +29909,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -29917,6 +29942,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	SAVE_OPLINE();
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -33599,6 +33629,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -33627,6 +33662,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_V
 	SAVE_OPLINE();
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -43262,8 +43302,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CV_C
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -45915,6 +45955,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -45944,6 +45989,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	SAVE_OPLINE();
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -47413,8 +47463,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CV_T
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -50963,6 +51013,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -50992,6 +51047,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	SAVE_OPLINE();
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -51055,6 +51115,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -51084,6 +51149,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	SAVE_OPLINE();
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -53061,8 +53131,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_DIV_SPEC_CV_C
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -55709,6 +55779,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -55738,6 +55813,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_ASSIGN_SPEC_C
 	SAVE_OPLINE();
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -62312,8 +62392,8 @@ static ZEND_VM_COLD ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_S
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -65390,8 +65470,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CONST_TMP
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -67872,8 +67952,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CONST_CV_
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -72127,8 +72207,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_TMPVAR_CO
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			(((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -73656,8 +73736,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_TMPVAR_TM
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			(((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -75343,8 +75423,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_TMPVAR_CV
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			(((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -81782,6 +81862,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_CO
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -81810,6 +81895,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_CO
 	SAVE_OPLINE();
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -85507,6 +85597,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_TM
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -85535,6 +85630,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_TM
 	SAVE_OPLINE();
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -85609,6 +85709,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_VA
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -85637,6 +85742,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_VA
 	SAVE_OPLINE();
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -89319,6 +89429,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_CV
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -89347,6 +89462,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_VAR_CV
 	SAVE_OPLINE();
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = _get_zval_ptr_ptr_var(opline->op1.var EXECUTE_DATA_CC);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -98982,8 +99102,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CV_CONST_
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CONST & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -101635,6 +101755,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_CON
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -101664,6 +101789,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_CON
 	SAVE_OPLINE();
 	value = RT_CONSTANT(opline, opline->op2);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -103133,8 +103263,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CV_TMPVAR
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -106683,6 +106813,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_TMP
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -106712,6 +106847,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_TMP
 	SAVE_OPLINE();
 	value = _get_zval_ptr_tmp(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -106775,6 +106915,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_VAR
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -106804,6 +106949,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_VAR
 	SAVE_OPLINE();
 	value = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -108679,8 +108829,8 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_DIV_SPEC_CV_CV_TAI
 	if (UNEXPECTED(Z_TYPE_P(op1) == IS_OBJECT || Z_TYPE_P(op2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_DIV, EX_VAR(opline->result.var), op1, op2,
 			((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((IS_CV & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		div_function(EX_VAR(opline->result.var), op1, op2);
@@ -111327,6 +111477,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_CV_
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
 
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
+
 	if (0 || UNEXPECTED(0)) {
 		zend_refcounted *garbage = NULL;
 
@@ -111356,6 +111511,11 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_ASSIGN_SPEC_CV_CV_
 	SAVE_OPLINE();
 	value = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
 	variable_ptr = EX_VAR(opline->op1.var);
+
+	if (UNEXPECTED(Z_TYPE_INFO_P(variable_ptr) == IS_OBJECT_EX)) {
+		/* UGL: the old vector goes straight back to the pool */
+		zend_ugl_vec_release_slot(variable_ptr);
+	}
 
 	if (0 || UNEXPECTED(1)) {
 		zend_refcounted *garbage = NULL;
@@ -112425,8 +112585,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_ADD, EX_VAR(opline->result.var), op_1, op_2,
 			((opline->op1_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		add_function(EX_VAR(opline->result.var), op_1, op_2);
@@ -112454,8 +112614,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_SUB, EX_VAR(opline->result.var), op_1, op_2,
 			((opline->op1_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		sub_function(EX_VAR(opline->result.var), op_1, op_2);
@@ -112483,8 +112643,8 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 	if (UNEXPECTED(Z_TYPE_P(op_1) == IS_OBJECT || Z_TYPE_P(op_2) == IS_OBJECT)
 	 && zend_ugl_vec_binary_op(ZEND_MUL, EX_VAR(opline->result.var), op_1, op_2,
 			((opline->op1_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP1_TMP : 0)
-				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0)
-				| (ZEND_UGL_ASSIGNS_RESULT_TO_OP1(opline) ? ZEND_UGL_OP1_ASSIGN : 0))) {
+				| ((opline->op2_type & (IS_TMP_VAR|IS_VAR)) ? ZEND_UGL_OP2_TMP : 0),
+			ZEND_UGL_ASSIGN_TARGET(opline))) {
 		/* handled by the UGL vector fast path */
 	} else {
 		mul_function(EX_VAR(opline->result.var), op_1, op_2);
