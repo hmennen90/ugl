@@ -8,7 +8,7 @@
 //     PROPS  1       keep about half of the vectors and matrices in typed properties of an object
 //
 // The float and integer variables change in every iteration (the JIT keeps such variables in registers).
-// dot() calls and sums or products of plain floats are part of the scalars.
+// dot() calls ($a->dot($b) and dot($a, $b)) and sums or products of plain floats are part of the scalars.
 // A program is only worth comparing when the interpreter finishes it: run-fuzz.sh counts the seeds
 // that end in an error. The JIT settings are in run-fuzz.sh.
 mt_srand((int)($argv[2] ?? 1));
@@ -18,7 +18,7 @@ function vlit($d) { $c=[]; for($i=0;$i<$d;$i++) $c[]=num(); return "vec$d(".impl
 function mlit() { $c=[]; for($i=0;$i<16;$i++) $c[]=num(); return "mat4(".implode(',',$c).")"; }
 $vecs = [2=>['$a2','$b2'], 3=>['$a3','$b3'], 4=>['$a4','$b4']];
 $mats = ['$m','$n','$k'];
-$sc = ['0.5','2','$f','$g','0.016','3.0','-1.5','16777217','9007199254740993','-9007199254740993','$h','$a3->x','$b4->w','dot($a2, $b2)','dot($a3, $b3)','dot($a4, $b4)','(2.0 * dot($a3, $a3))','($f + dot($a2, $b2))','($f - $f * 0.5)','(1e300 * $f * $f)'];
+$sc = ['0.5','2','$f','$g','0.016','3.0','-1.5','16777217','9007199254740993','-9007199254740993','$h','$a3->x','$b4->w','dot($a2, $b2)','dot($a3, $b3)','dot($a4, $b4)','$a3->dot($b3)','$b4->dot($a4)','(0.5 * $a2->dot($b2))','(2.0 * dot($a3, $a3))','($f + dot($a2, $b2))','($f - $f * 0.5)','(1e300 * $f * $f)'];
 function scal() { global $sc; return $sc[mt_rand(0,count($sc)-1)]; }
 function genV($d, $depth) {
   global $vecs;

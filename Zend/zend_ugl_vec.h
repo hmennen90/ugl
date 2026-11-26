@@ -76,6 +76,13 @@ ZEND_API void zend_ugl_vec_release_slot(zval *var);
  * possible (shared vector, other operand types, ...), the generic path then runs. */
 ZEND_API bool zend_ugl_vec_assign_op(uint8_t opcode, zval *var, zval *value);
 
+/* ZEND_UGL_DOT: $a->dot($b). The fast path computes the dot product of two vectors of one class (the
+ * float32 sum the method makes). Everything else is a plain method call: zend_ugl_dot_method_call() makes it
+ * from the handler, with the visibility, __call and errors of a call written out. The argument goes by
+ * value. */
+ZEND_API bool zend_ugl_vec_dot_fast(zend_object *a, zend_object *b, double *out);
+ZEND_API void zend_ugl_dot_method_call(zval *obj, zval *arg, zval *result);
+
 /* ZEND_FETCH_OBJ_R: $v->x, ->y, ->z, ->w of a vector without the property machinery. */
 ZEND_API bool zend_ugl_vec_fetch_component(zend_object *obj, const zend_string *name, zval *result);
 
@@ -112,6 +119,15 @@ static zend_always_inline bool zend_ugl_vec_binary_op(uint8_t opcode, zval *resu
 }
 
 static zend_always_inline void zend_ugl_vec_release_slot(zval *var)
+{
+}
+
+static zend_always_inline bool zend_ugl_vec_dot_fast(zend_object *a, zend_object *b, double *out)
+{
+	return false;
+}
+
+static zend_always_inline void zend_ugl_dot_method_call(zval *obj, zval *arg, zval *result)
 {
 }
 

@@ -571,6 +571,58 @@ static void ugl_flf_ctor(uint8_t dim, zval *return_value, zval *a1, zval *a2, zv
 	ugl_vec_new(return_value, dim, c);
 }
 
+ZEND_API bool zend_ugl_vec_dot_fast(zend_object *a, zend_object *b, double *out)
+{
+	if (a->handlers != &ugl_vec_handlers || b->ce != a->ce) {
+		return false;
+	}
+	zend_ugl_vec *va = ugl_vec_from_obj(a), *vb = ugl_vec_from_obj(b);
+	float sum = 0;
+
+	for (uint8_t i = 0; i < va->dim; i++) {
+		sum += va->c[i] * vb->c[i];
+	}
+	*out = sum;
+	return true;
+}
+
+/* $obj->dot($arg) when the fast path does not apply: the method call INIT_METHOD_CALL, SEND and DO_FCALL
+ * would have made. */
+ZEND_API void zend_ugl_dot_method_call(zval *obj, zval *arg, zval *result)
+{
+	static zend_string *name = NULL;
+	zend_object *zobj;
+	zend_function *fbc;
+	zval param;
+
+	if (!name) {
+		name = zend_string_init_interned("dot", 3, 1);
+	}
+	if (Z_TYPE_P(obj) != IS_OBJECT) {
+		zend_throw_error(NULL, "Call to a member function dot() on %s", zend_zval_type_name(obj));
+		return;
+	}
+	zobj = Z_OBJ_P(obj);
+	GC_ADDREF(zobj);
+	fbc = zobj->handlers->get_method(&zobj, name, NULL);
+	if (UNEXPECTED(fbc == NULL)) {
+		if (EXPECTED(!EG(exception))) {
+			zend_undefined_method(zobj->ce, name);
+		}
+		OBJ_RELEASE(zobj);
+		return;
+	}
+	/* The argument goes by value. A method taking it by reference (a user class with a dot(&$x)) gets the
+	 * usual warning: the optimizer does not know that this opcode could write to its variable, so
+	 * handing out a reference to it would be unsafe. */
+	ZVAL_COPY_VALUE(&param, arg);
+	zend_call_known_function(fbc, (fbc->common.fn_flags & ZEND_ACC_STATIC) ? NULL : zobj, zobj->ce, result, 1, &param, NULL);
+	if (fbc->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE) {
+		zend_free_trampoline(fbc);
+	}
+	OBJ_RELEASE(zobj);
+}
+
 /* dot($a, $b) of two vectors of one class, the function form of $a->dot($b): frameless, and a
  * float32 sum in the order of the method, so that both give the same bits. */
 static ZEND_NAMED_FUNCTION(ugl_fn_dot)

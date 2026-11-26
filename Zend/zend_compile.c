@@ -5261,8 +5261,88 @@ static void zend_compile_call(znode *result, zend_ast *ast, uint32_t type) /* {{
 }
 /* }}} */
 
+#ifdef ZEND_UGL
+/* The argument of $v->dot($w) may be compiled before the receiver is read only when evaluating it cannot
+ * change the receiver: a variable, a literal, + - * / of those, and vec2() / vec3() / vec4() / mat4()
+ * calls with such arguments. */
+static bool zend_ugl_dot_arg_is_simple(zend_ast *ast)
+{
+	switch (ast->kind) {
+		case ZEND_AST_ZVAL:
+			return true;
+		case ZEND_AST_VAR:
+			return ast->child[0]->kind == ZEND_AST_ZVAL && Z_TYPE_P(zend_ast_get_zval(ast->child[0])) == IS_STRING;
+		case ZEND_AST_BINARY_OP:
+			return (ast->attr == ZEND_ADD || ast->attr == ZEND_SUB || ast->attr == ZEND_MUL || ast->attr == ZEND_DIV)
+				&& zend_ugl_dot_arg_is_simple(ast->child[0]) && zend_ugl_dot_arg_is_simple(ast->child[1]);
+		case ZEND_AST_UNARY_MINUS:
+		case ZEND_AST_UNARY_PLUS:
+			return zend_ugl_dot_arg_is_simple(ast->child[0]);
+		case ZEND_AST_CALL: {
+			zend_ast *name = ast->child[0];
+			zend_ast *args = ast->child[1];
+
+			if (FC(current_namespace) || name->kind != ZEND_AST_ZVAL || Z_TYPE_P(zend_ast_get_zval(name)) != IS_STRING
+			 || args->kind != ZEND_AST_ARG_LIST) {
+				return false;
+			}
+			if (!zend_string_equals_literal(Z_STR_P(zend_ast_get_zval(name)), "vec2")
+			 && !zend_string_equals_literal(Z_STR_P(zend_ast_get_zval(name)), "vec3")
+			 && !zend_string_equals_literal(Z_STR_P(zend_ast_get_zval(name)), "vec4")) {
+				return false;
+			}
+			for (uint32_t i = 0; i < zend_ast_get_list(args)->children; i++) {
+				zend_ast *child = zend_ast_get_list(args)->child[i];
+
+				if (child->kind == ZEND_AST_UNPACK || child->kind == ZEND_AST_NAMED_ARG || !zend_ugl_dot_arg_is_simple(child)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		default:
+			return false;
+	}
+}
+
+/* $v->dot($w) on a variable becomes one opcode: two vectors of one class give the dot product without a
+ * call, anything else is a plain method call made from the handler. */
+static bool zend_ugl_try_compile_dot_call(znode *result, zend_ast *ast, uint32_t type)
+{
+	zend_ast *obj_ast = ast->child[0];
+	zend_ast *method_ast = ast->child[1];
+	zend_ast *args_ast = ast->child[2];
+	znode obj_node, arg_node;
+	zend_op *opline;
+
+	if (ast->kind != ZEND_AST_METHOD_CALL || type != BP_VAR_R
+	 || obj_ast->kind != ZEND_AST_VAR || is_this_fetch(obj_ast)
+	 || obj_ast->child[0]->kind != ZEND_AST_ZVAL || Z_TYPE_P(zend_ast_get_zval(obj_ast->child[0])) != IS_STRING
+	 || method_ast->kind != ZEND_AST_ZVAL || Z_TYPE_P(zend_ast_get_zval(method_ast)) != IS_STRING
+	 || !zend_string_equals_literal(Z_STR_P(zend_ast_get_zval(method_ast)), "dot")
+	 || args_ast->kind != ZEND_AST_ARG_LIST || zend_ast_get_list(args_ast)->children != 1
+	 || zend_ast_get_list(args_ast)->child[0]->kind == ZEND_AST_UNPACK
+	 || zend_ast_get_list(args_ast)->child[0]->kind == ZEND_AST_NAMED_ARG
+	 || !zend_ugl_dot_arg_is_simple(zend_ast_get_list(args_ast)->child[0])) {
+		return false;
+	}
+	if (zend_try_compile_cv(&obj_node, obj_ast, BP_VAR_R) != SUCCESS) {
+		return false;
+	}
+	zend_compile_expr(&arg_node, zend_ast_get_list(args_ast)->child[0]);
+	opline = zend_emit_op_tmp(result, ZEND_UGL_DOT, &obj_node, &arg_node);
+	opline->lineno = zend_ast_get_lineno(method_ast);
+	return true;
+}
+#endif
+
 static void zend_compile_method_call(znode *result, zend_ast *ast, uint32_t type) /* {{{ */
 {
+#ifdef ZEND_UGL
+	if (zend_ugl_try_compile_dot_call(result, ast, type)) {
+		return;
+	}
+#endif
 	zend_ast *obj_ast = ast->child[0];
 	zend_ast *method_ast = ast->child[1];
 	zend_ast *args_ast = ast->child[2];

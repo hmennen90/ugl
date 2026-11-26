@@ -9992,6 +9992,41 @@ ZEND_VM_HANDLER(211, ZEND_FRAMELESS_ICALL_4, ANY, ANY, SPEC(OBSERVER))
 	ZEND_VM_NEXT_OPCODE_EX(1, 2);
 }
 
+ZEND_VM_HANDLER(212, ZEND_UGL_DOT, CV, CONST|TMPVAR|CV, SPEC(OBSERVER))
+{
+	USE_OPLINE
+	zval *obj, *arg, *result;
+
+	SAVE_OPLINE();
+	obj = GET_OP1_ZVAL_PTR_UNDEF(BP_VAR_R);
+	if (UNEXPECTED(Z_TYPE_P(obj) == IS_UNDEF)) {
+		obj = ZVAL_UNDEFINED_OP1();
+	}
+	ZVAL_DEREF(obj);
+	arg = GET_OP2_ZVAL_PTR(BP_VAR_R);
+	ZVAL_DEREF(arg);
+	result = EX_VAR(opline->result.var);
+	ZVAL_NULL(result);
+	if (EG(exception)) {
+		FREE_OP2();
+		HANDLE_EXCEPTION();
+	}
+
+	/* $obj->dot($arg): two vectors of one class need no call (not while an observer watches the call) */
+	if (!ZEND_OBSERVER_ENABLED && EXPECTED(Z_TYPE_P(obj) == IS_OBJECT) && EXPECTED(Z_TYPE_P(arg) == IS_OBJECT)) {
+		double sum;
+
+		if (zend_ugl_vec_dot_fast(Z_OBJ_P(obj), Z_OBJ_P(arg), &sum)) {
+			ZVAL_DOUBLE(result, sum);
+			FREE_OP2();
+			ZEND_VM_NEXT_OPCODE();
+		}
+	}
+	zend_ugl_dot_method_call(obj, arg, result);
+	FREE_OP2();
+	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+}
+
 ZEND_VM_HANDLER(209, ZEND_INIT_PARENT_PROPERTY_HOOK_CALL, CONST, UNUSED|NUM, NUM)
 {
 	USE_OPLINE

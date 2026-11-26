@@ -332,7 +332,8 @@ END_EXTERN_C()
 #define ZEND_INIT_PARENT_PROPERTY_HOOK_CALL 209
 #define ZEND_DECLARE_ATTRIBUTED_CONST       210
 #define ZEND_FRAMELESS_ICALL_4              211
+#define ZEND_UGL_DOT                        212
 
-#define ZEND_VM_LAST_OPCODE                 211
+#define ZEND_VM_LAST_OPCODE                 212
 
 #endif

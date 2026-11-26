@@ -271,6 +271,20 @@ function vec4Errors(): string {
     return implode('|', array_unique($r));
 }
 echo vec4Errors(), "\n";
+
+// A variable that turns from float to int and back while the loop runs: the type guard that the
+// compiled run replaces must still protect the opcodes after it.
+function typeSwitch(): string {
+    $a2 = vec2(1.5, 0.1); $b2 = vec2(1.5, -2.25); $a4 = vec4(-2.25, 7, 0.3333333, -0.0); $f = 0.25; $out = '';
+    for ($i = 0; $i < 100; $i++) {
+        $a4 /= ($f + dot($a2, $b2));
+        $f = $f * 1.001 + 0.0001;
+        if ($i == 80) { $f = 2; }
+        $out .= bits($a4) . gettype($f);
+    }
+    return md5($out);
+}
+echo typeSwitch(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -300,3 +314,4 @@ ok|vec2(): Argument #2 ($y) must be of type float, null given|vec3(): Argument #
 6648b6de13094cfd78415daa4ea109bb 239.8 252.50399867418
 944eae0f5e9237aa602144ffe6be3df2
 ok|vec4(): Argument #4 ($w) must be of type float, array given|vec4(): Argument #4 ($w) must be of type float, string given
+4ef62009f634437c9cbddfe718c7768d
