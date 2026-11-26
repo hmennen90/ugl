@@ -893,6 +893,7 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 		if (opline->opcode == ZEND_ASSIGN_DIM ||
 #ifdef ZEND_UGL
 			opline->opcode == ZEND_FRAMELESS_ICALL_3 ||
+			opline->opcode == ZEND_FRAMELESS_ICALL_4 ||
 #endif
 			opline->opcode == ZEND_ASSIGN_OBJ ||
 			opline->opcode == ZEND_ASSIGN_STATIC_PROP ||
@@ -983,6 +984,28 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 					}
 				}
 				break;
+#ifdef ZEND_UGL
+			case ZEND_FRAMELESS_ICALL_4: {
+				/* The type of the fourth argument, the op2 of the OP_DATA. */
+				const zend_op *op_data = opline + 1;
+				uint8_t type4 = IS_UNKNOWN;
+
+				if (op_data->op2_type & (IS_TMP_VAR|IS_VAR|IS_CV)) {
+					zval *zv = EX_VAR(op_data->op2.var);
+
+					if (Z_TYPE_P(zv) == IS_INDIRECT) {
+						zv = Z_INDIRECT_P(zv);
+					}
+					if (Z_TYPE_P(zv) == IS_REFERENCE) {
+						zv = Z_REFVAL_P(zv);
+						type4 = IS_TRACE_REFERENCE;
+					}
+					type4 = (uint8_t) (Z_TYPE_P(zv) | (type4 == IS_TRACE_REFERENCE ? IS_TRACE_REFERENCE : 0));
+				}
+				TRACE_RECORD_VM(ZEND_JIT_TRACE_VAL_INFO, NULL, type4, 0, 0);
+				break;
+			}
+#endif
 			case ZEND_FETCH_OBJ_R: {
 				if (opline->op2_type == IS_CONST) {
 					/* Remove the SIMPLE_GET flag to avoid inlining hooks. */

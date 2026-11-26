@@ -173,6 +173,7 @@ static inline bool may_have_side_effects(
 		case ZEND_FRAMELESS_ICALL_1:
 		case ZEND_FRAMELESS_ICALL_2:
 		case ZEND_FRAMELESS_ICALL_3:
+		case ZEND_FRAMELESS_ICALL_4:
 			/* For now assume all calls have side effects */
 			return 1;
 		case ZEND_RECV:

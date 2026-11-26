@@ -547,9 +547,9 @@ ZEND_FUNCTION(vec4) { ugl_function_ctor(INTERNAL_FUNCTION_PARAM_PASSTHRU, 4); }
 /* vec2() and vec3() as frameless functions: the compiler emits ZEND_FRAMELESS_ICALL_2 / _3, the
  * arguments reach the handler without a call frame. Plain floats and integers are turned into
  * a vector right here; anything else runs the real function, which reports its errors. */
-static void ugl_flf_ctor(uint8_t dim, zval *return_value, zval *a1, zval *a2, zval *a3)
+static void ugl_flf_ctor(uint8_t dim, zval *return_value, zval *a1, zval *a2, zval *a3, zval *a4)
 {
-	zval *arg[3] = { a1, a2, a3 };
+	zval *arg[4] = { a1, a2, a3, a4 };
 	float c[4] = {0, 0, 0, 0};
 
 	for (uint8_t i = 0; i < dim; i++) {
@@ -558,8 +558,8 @@ static void ugl_flf_ctor(uint8_t dim, zval *return_value, zval *a1, zval *a2, zv
 		} else if (EXPECTED(Z_TYPE_P(arg[i]) == IS_LONG)) {
 			c[i] = (float) (double) Z_LVAL_P(arg[i]);
 		} else {
-			zval params[3];
-			zend_function *fbc = zend_hash_str_find_ptr(EG(function_table), dim == 2 ? "vec2" : "vec3", 4);
+			zval params[4];
+			zend_function *fbc = zend_hash_str_find_ptr(EG(function_table), dim == 2 ? "vec2" : (dim == 3 ? "vec3" : "vec4"), 4);
 
 			for (uint8_t j = 0; j < dim; j++) {
 				ZVAL_COPY_VALUE(&params[j], arg[j]);
@@ -618,8 +618,9 @@ ZEND_FRAMELESS_FUNCTION(dot, 2)
 	zend_call_known_function(fbc, NULL, NULL, return_value, 2, params, NULL);
 }
 
-ZEND_FRAMELESS_FUNCTION(vec2, 2) { ugl_flf_ctor(2, return_value, arg1, arg2, NULL); }
-ZEND_FRAMELESS_FUNCTION(vec3, 3) { ugl_flf_ctor(3, return_value, arg1, arg2, arg3); }
+ZEND_FRAMELESS_FUNCTION(vec2, 2) { ugl_flf_ctor(2, return_value, arg1, arg2, NULL, NULL); }
+ZEND_FRAMELESS_FUNCTION(vec3, 3) { ugl_flf_ctor(3, return_value, arg1, arg2, arg3, NULL); }
+ZEND_FRAMELESS_FUNCTION(vec4, 4) { ugl_flf_ctor(4, return_value, arg1, arg2, arg3, arg4); }
 
 static ZEND_NAMED_FUNCTION(ugl_vec_dot)
 {
@@ -1118,6 +1119,11 @@ static const zend_frameless_function_info frameless_function_infos_vec2[] = {
 	{ 0 },
 };
 
+static const zend_frameless_function_info frameless_function_infos_vec4[] = {
+	{ ZEND_FRAMELESS_FUNCTION_NAME(vec4, 4), 4 },
+	{ 0 },
+};
+
 static const zend_frameless_function_info frameless_function_infos_vec3[] = {
 	{ ZEND_FRAMELESS_FUNCTION_NAME(vec3, 3), 3 },
 	{ 0 },
@@ -1127,7 +1133,7 @@ static const zend_function_entry ugl_functions[] = {
 	ZEND_RAW_FENTRY("vec2", zif_vec2, arginfo_fn_vec2, 0, frameless_function_infos_vec2, NULL)
 	ZEND_RAW_FENTRY("dot", ugl_fn_dot, arginfo_fn_dot, 0, frameless_function_infos_dot, NULL)
 	ZEND_RAW_FENTRY("vec3", zif_vec3, arginfo_fn_vec3, 0, frameless_function_infos_vec3, NULL)
-	ZEND_FE(vec4, arginfo_fn_vec4)
+	ZEND_RAW_FENTRY("vec4", zif_vec4, arginfo_fn_vec4, 0, frameless_function_infos_vec4, NULL)
 	ZEND_FE(mat4, arginfo_fn_mat4)
 	ZEND_FE_END
 };

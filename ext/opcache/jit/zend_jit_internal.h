@@ -803,10 +803,10 @@ static zend_always_inline bool is_signed(double d)
 typedef struct _zend_jit_ugl_step {
 	const zend_op   *opline;
 	zend_jit_trace_rec *rec;      /* its ZEND_JIT_TRACE_VM record */
-	uint8_t          kind[3];     /* ZEND_JIT_UGL_* of op1, op2 and the OP_DATA's op1 (with data_op, [1] is the OP_DATA) */
-	uint8_t          stype[3];    /* recorded zval type of a scalar variable */
-	zend_class_entry *ce[3];      /* class of a vec / mat variable operand (kind VEC_CV) */
-	uint8_t          ctor;        /* vec2() / vec3() with this many arguments: the components are its operands */
+	uint8_t          kind[4];     /* ZEND_JIT_UGL_* of op1, op2, the OP_DATA's op1 and op2 (with data_op, [1] is the OP_DATA's op1) */
+	uint8_t          stype[4];    /* recorded zval type of a scalar variable */
+	zend_class_entry *ce[4];      /* class of a vec / mat variable operand (kind VEC_CV) */
+	uint8_t          ctor;        /* vec2() / vec3() / vec4() with this many arguments: the components are its operands */
 	bool             dot;         /* dot($a, $b): the sum of the products of the components */
 	uint8_t          swz[4];      /* ZEND_FETCH_OBJ_R of a swizzle: component indexes */
 	uint8_t          nswz;

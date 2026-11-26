@@ -4148,6 +4148,7 @@ static int zend_jit_handler(zend_jit_ctx *jit, const zend_op *opline, int may_th
 		case ZEND_ASSIGN_STATIC_PROP_REF:
 		case ZEND_ASSIGN_OBJ_REF:
 		case ZEND_FRAMELESS_ICALL_3:
+		case ZEND_FRAMELESS_ICALL_4:
 		case ZEND_DECLARE_ATTRIBUTED_CONST:
 			zend_jit_set_last_valid_opline(jit, opline + 2);
 			break;
@@ -17535,12 +17536,12 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 
 	/* Every place once: its type, and for an object its class. */
 	for (int k = 0; k < n; k++) {
-		for (int o = 0; o < 3; o++) {
+		for (int o = 0; o < 4; o++) {
 			uint8_t kind = steps[k].kind[o];
-			/* o == 2 is the OP_DATA of a vec3() call; o == 1 is the OP_DATA of ASSIGN_OBJ_OP */
-			bool from_data = (o == 2) || (o == 1 && steps[k].data_op && !steps[k].ctor);
+			/* o == 2 and 3 are the OP_DATA's op1 and op2 of a vec3() / vec4() call; o == 1 is the OP_DATA of ASSIGN_OBJ_OP */
+			bool from_data = (o >= 2) || (o == 1 && steps[k].data_op && !steps[k].ctor);
 			const zend_op *src = from_data ? steps[k].opline + 1 : steps[k].opline;
-			uint32_t var = from_data ? src->op1.var : (o == 0 ? src->op1.var : src->op2.var);
+			uint32_t var = o == 3 ? src->op2.var : (from_data ? src->op1.var : (o == 0 ? src->op1.var : src->op2.var));
 
 			if (kind == ZEND_JIT_UGL_VEC_CV) {
 				UGL_ADD_VAR(var, IS_OBJECT, steps[k].ce[o]);
@@ -17617,9 +17618,9 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 #define UGL_OPERAND(OUT, STEP, O) do { \
 		uint8_t _kind = (STEP)->kind[O]; \
 		const zend_op *_op = (STEP)->opline; \
-		bool _data = ((O) == 2) || ((O) == 1 && (STEP)->data_op && !(STEP)->ctor); \
+		bool _data = ((O) >= 2) || ((O) == 1 && (STEP)->data_op && !(STEP)->ctor); \
 		const zend_op *_own = _data ? _op + 1 : _op; \
-		znode_op _node = _data ? _own->op1 : ((O) == 0 ? _op->op1 : _op->op2); \
+		znode_op _node = (O) == 3 ? _own->op2 : (_data ? _own->op1 : ((O) == 0 ? _op->op1 : _op->op2)); \
 		int _c; \
 		switch (_kind) { \
 			case ZEND_JIT_UGL_VEC_CV: \
@@ -17713,10 +17714,10 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 				UGL_OPERAND(v, &steps[k], o);
 				r.lane[o] = v.lane[0];
 			}
-			r.ce = steps[k].ctor == 2 ? zend_ce_ugl_vec2 : zend_ce_ugl_vec3;
+			r.ce = steps[k].ctor == 2 ? zend_ce_ugl_vec2 : (steps[k].ctor == 3 ? zend_ce_ugl_vec3 : zend_ce_ugl_vec4);
 			for (int o = 0; o < steps[k].ctor; o++) {
 				if (steps[k].kind[o] == ZEND_JIT_UGL_TMP) {
-					uint32_t var = o == 2 ? (opline + 1)->op1.var : (o == 0 ? opline->op1.var : opline->op2.var);
+					uint32_t var = o == 3 ? (opline + 1)->op2.var : (o == 2 ? (opline + 1)->op1.var : (o == 0 ? opline->op1.var : opline->op2.var));
 
 					for (int t = 0; t < ntmp; t++) {
 						if (tmp[t].var == var) {

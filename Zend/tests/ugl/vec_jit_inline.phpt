@@ -245,6 +245,32 @@ function loopCarried(): string {
     return md5($out) . ' ' . $s . ' ' . $t;
 }
 echo loopCarried(), "\n";
+
+// vec4() calls: frameless with four arguments, and inside runs the arguments are the components.
+function vec4s(): string {
+    $f = 0.1; $n = 16777217; $a = vec3(1, 2, 3); $c = vec4(0, 0, 0, 0); $s = '';
+    for ($i = 0; $i < 80; $i++) {
+        $c = vec4($f, $n, $i, $a->x * 2.0);
+        $s .= bits($c);
+        $c = vec4($a->x, $a->y, $a->z, $f) * 0.5 + vec4($i, 1, 2, 3);
+        $s .= bits($c);
+        $c += vec4($f - $f * 0.5, 2, 9007199254740993, $a->x);
+        $s .= bits($c);
+        if ($i === 50) { $f = 3; $n = 0.5; }
+        $f = $f + 0.001;
+    }
+    return md5($s);
+}
+echo vec4s(), "\n";
+function vec4Errors(): string {
+    $r = [];
+    for ($i = 0; $i < 60; $i++) {
+        try { $v = vec4(1, 2, 3, $i < 50 ? 1.5 : "x"); $r[] = 'ok'; } catch (TypeError $e) { $r[] = $e->getMessage(); }
+        try { $v = vec4(1, 2, 3, []); } catch (TypeError $e) { $r[] = $e->getMessage(); }
+    }
+    return implode('|', array_unique($r));
+}
+echo vec4Errors(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -272,3 +298,5 @@ ok|vec2(): Argument #2 ($y) must be of type float, null given|vec3(): Argument #
 5b5f683d74b1690551affafcf5ec8ac6
 6|dot() expects exactly 2 arguments, 1 given|dot(): Argument #2 ($b) must be of type vec3, vec2 given
 6648b6de13094cfd78415daa4ea109bb 239.8 252.50399867418
+944eae0f5e9237aa602144ffe6be3df2
+ok|vec4(): Argument #4 ($w) must be of type float, array given|vec4(): Argument #4 ($w) must be of type float, string given

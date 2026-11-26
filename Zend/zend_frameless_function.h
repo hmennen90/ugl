@@ -32,10 +32,12 @@
 #define ZEND_FRAMELESS_FUNCTION_PARAMETERS_1 zval *return_value, zval *arg1
 #define ZEND_FRAMELESS_FUNCTION_PARAMETERS_2 zval *return_value, zval *arg1, zval *arg2
 #define ZEND_FRAMELESS_FUNCTION_PARAMETERS_3 zval *return_value, zval *arg1, zval *arg2, zval *arg3
+#define ZEND_FRAMELESS_FUNCTION_PARAMETERS_4 zval *return_value, zval *arg1, zval *arg2, zval *arg3, zval *arg4
 
 #define ZEND_FRAMELESS_FUNCTION_NAME(name, arity) zflf_##name##_##arity
-#define ZEND_OP_IS_FRAMELESS_ICALL(opcode) ((opcode) >= ZEND_FRAMELESS_ICALL_0 && (opcode) <= ZEND_FRAMELESS_ICALL_3)
-#define ZEND_FLF_NUM_ARGS(opcode) ((opcode) - ZEND_FRAMELESS_ICALL_0)
+/* ICALL_4 is numbered apart from ICALL_0..3: its fourth argument is the op2 of the OP_DATA. */
+#define ZEND_OP_IS_FRAMELESS_ICALL(opcode) (((opcode) >= ZEND_FRAMELESS_ICALL_0 && (opcode) <= ZEND_FRAMELESS_ICALL_3) || (opcode) == ZEND_FRAMELESS_ICALL_4)
+#define ZEND_FLF_NUM_ARGS(opcode) ((opcode) == ZEND_FRAMELESS_ICALL_4 ? 4 : (opcode) - ZEND_FRAMELESS_ICALL_0)
 #define ZEND_FLF_FUNC(opline) (zend_flf_functions[(opline)->extended_value])
 #define ZEND_FLF_HANDLER(opline) (zend_flf_handlers[(opline)->extended_value])
 
@@ -111,6 +113,7 @@ typedef void (*zend_frameless_function_0)(zval *return_value);
 typedef void (*zend_frameless_function_1)(zval *return_value, zval *op1);
 typedef void (*zend_frameless_function_2)(zval *return_value, zval *op1, zval *op2);
 typedef void (*zend_frameless_function_3)(zval *return_value, zval *op1, zval *op2, zval *op3);
+typedef void (*zend_frameless_function_4)(zval *return_value, zval *op1, zval *op2, zval *op3, zval *op4);
 
 extern size_t zend_flf_count;
 extern size_t zend_flf_capacity;

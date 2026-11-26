@@ -1642,6 +1642,7 @@ ZEND_API void zend_frameless_observed_call(zend_execute_data *execute_data)
 	call->prev_execute_data = execute_data;
 
 	switch (num_args) {
+		case 4: frameless_observed_call_copy(call, 3, zend_get_zval_ptr(opline+1, (opline+1)->op2_type, &(opline+1)->op2, execute_data)); ZEND_FALLTHROUGH;
 		case 3: frameless_observed_call_copy(call, 2, zend_get_zval_ptr(opline+1, (opline+1)->op1_type, &(opline+1)->op1, execute_data)); ZEND_FALLTHROUGH;
 		case 2: frameless_observed_call_copy(call, 1, zend_get_zval_ptr(opline, opline->op2_type, &opline->op2, execute_data)); ZEND_FALLTHROUGH;
 		case 1: frameless_observed_call_copy(call, 0, zend_get_zval_ptr(opline, opline->op1_type, &opline->op1, execute_data));

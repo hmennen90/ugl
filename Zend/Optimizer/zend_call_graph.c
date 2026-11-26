@@ -108,7 +108,8 @@ ZEND_API void zend_analyze_calls(zend_arena **arena, zend_script *script, uint32
 			case ZEND_FRAMELESS_ICALL_0:
 			case ZEND_FRAMELESS_ICALL_1:
 			case ZEND_FRAMELESS_ICALL_2:
-			case ZEND_FRAMELESS_ICALL_3: {
+			case ZEND_FRAMELESS_ICALL_3:
+			case ZEND_FRAMELESS_ICALL_4: {
 				func = ZEND_FLF_FUNC(opline);
 				zend_call_info *call_info = zend_arena_calloc(arena, 1, sizeof(zend_call_info));
 				call_info->caller_op_array = op_array;

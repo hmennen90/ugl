@@ -4686,7 +4686,7 @@ static const zend_frameless_function_info *find_frameless_function_info(zend_ast
 		return NULL;
 	}
 
-	if (args->children > 3) {
+	if (args->children > 4) {
 		return NULL;
 	}
 
@@ -4713,7 +4713,7 @@ static uint32_t zend_compile_frameless_icall_ex(znode *result, zend_ast_list *ar
 	int lineno = CG(zend_lineno);
 	uint32_t num_args = frameless_function_info->num_args;
 	uint32_t offset = find_frameless_function_offset(num_args, frameless_function_info->handler);
-	znode arg_zvs[3];
+	znode arg_zvs[4];
 	for (uint32_t i = 0; i < num_args; i++) {
 		if (i < args->children) {
 			zend_compile_expr(&arg_zvs[i], args->child[i]);
@@ -4725,7 +4725,7 @@ static uint32_t zend_compile_frameless_icall_ex(znode *result, zend_ast_list *ar
 			}
 		}
 	}
-	uint8_t opcode = ZEND_FRAMELESS_ICALL_0 + num_args;
+	uint8_t opcode = num_args == 4 ? ZEND_FRAMELESS_ICALL_4 : ZEND_FRAMELESS_ICALL_0 + num_args;
 	uint32_t opnum = get_next_op_number();
 	zend_op *opline = zend_emit_op_tmp(result, opcode, NULL, NULL);
 	opline->extended_value = offset;
@@ -4737,7 +4737,10 @@ static uint32_t zend_compile_frameless_icall_ex(znode *result, zend_ast_list *ar
 		SET_NODE(opline->op2, &arg_zvs[1]);
 	}
 	if (num_args >= 3) {
-		zend_emit_op_data(&arg_zvs[2]);
+		zend_op *op_data = zend_emit_op_data(&arg_zvs[2]);
+		if (num_args >= 4) {
+			SET_NODE(op_data->op2, &arg_zvs[3]);
+		}
 	}
 	return opnum;
 }

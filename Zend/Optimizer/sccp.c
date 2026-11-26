@@ -1722,17 +1722,23 @@ static void sccp_visit_instr(scdf_ctx *scdf, zend_op *opline, zend_ssa_op *ssa_o
 		case ZEND_FRAMELESS_ICALL_0:
 		case ZEND_FRAMELESS_ICALL_1:
 		case ZEND_FRAMELESS_ICALL_2:
-		case ZEND_FRAMELESS_ICALL_3: {
+		case ZEND_FRAMELESS_ICALL_3:
+		case ZEND_FRAMELESS_ICALL_4: {
 			/* We already know it can't be evaluated, don't bother checking again */
 			if (ssa_op->result_def < 0 || IS_BOT(&ctx->values[ssa_op->result_def])) {
 				break;
 			}
 
-			zval *args[3] = {NULL};
+			zval *args[4] = {NULL};
 			zend_function *func = ZEND_FLF_FUNC(opline);
 			uint32_t num_args = ZEND_FLF_NUM_ARGS(opline->opcode);
 
 			switch (num_args) {
+				case 4: {
+					zend_op *op_data = opline + 1;
+					args[3] = get_op2_value(ctx, op_data, &ctx->scdf.ssa->ops[op_data - ctx->scdf.op_array->opcodes]);
+					ZEND_FALLTHROUGH;
+				}
 	 			case 3: {
 					zend_op *op_data = opline + 1;
 					args[2] = get_op1_value(ctx, op_data, &ctx->scdf.ssa->ops[op_data - ctx->scdf.op_array->opcodes]);
@@ -2211,7 +2217,7 @@ static int try_remove_definition(sccp_ctx *ctx, int var_num, zend_ssa_var *var, 
 					if (opline->opcode == ZEND_DO_ICALL) {
 						removed_ops = remove_call(ctx, opline, ssa_op) - 1;
 					} else {
-						bool has_op_data = opline->opcode == ZEND_FRAMELESS_ICALL_3;
+						bool has_op_data = opline->opcode == ZEND_FRAMELESS_ICALL_3 || opline->opcode == ZEND_FRAMELESS_ICALL_4;
 						zend_ssa_remove_instr(ssa, opline, ssa_op);
 						removed_ops++;
 						if (has_op_data) {
@@ -2253,7 +2259,7 @@ static int try_remove_definition(sccp_ctx *ctx, int var_num, zend_ssa_var *var, 
 				if (opline->opcode == ZEND_DO_ICALL) {
 					removed_ops = remove_call(ctx, opline, ssa_op);
 				} else {
-					bool has_op_data = opline->opcode == ZEND_FRAMELESS_ICALL_3;
+					bool has_op_data = opline->opcode == ZEND_FRAMELESS_ICALL_3 || opline->opcode == ZEND_FRAMELESS_ICALL_4;
 					zend_ssa_remove_instr(ssa, opline, ssa_op);
 					removed_ops++;
 					if (has_op_data) {

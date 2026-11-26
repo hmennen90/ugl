@@ -29,7 +29,7 @@ function genV($d, $depth) {
   if ($r == 2) return '('.scal()." $op ".genV($d,$depth-1).')';
   if ($r == 3 && $d == 4) return '('.genM($depth-1).' * '.genV(4,$depth-1).')';
   if ($r == 4 && $d == 4) return '('.genV(4,$depth-1).' * '.genM($depth-1).')';
-  if ($r == 6 && $d <= 3) { $a=[]; for($i=0;$i<$d;$i++) $a[]=scal(); return "vec$d(".implode(', ',$a).")"; }
+  if ($r == 6) { $a=[]; for($i=0;$i<$d;$i++) $a[]=scal(); return "vec$d(".implode(', ',$a).")"; }
   if ($r == 5) { // swizzle of a vector with enough components
     $src = mt_rand($d, 4); $chars = ['x','y','z','w']; $s='';
     for ($i=0;$i<$d;$i++) $s .= $chars[mt_rand(0,$src-1)];

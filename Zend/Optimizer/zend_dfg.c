@@ -121,6 +121,16 @@ add_op1_def:
 				}
 			}
 			break;
+		case ZEND_FRAMELESS_ICALL_4:
+			/* the fourth argument is the op2 of the OP_DATA */
+			next = opline + 1;
+			if (next->op2_type & (IS_CV|IS_VAR|IS_TMP_VAR)) {
+				var_num = EX_VAR_TO_NUM(next->op2.var);
+				if (!zend_bitset_in(def, var_num)) {
+					zend_bitset_incl(use, var_num);
+				}
+			}
+			ZEND_FALLTHROUGH;
 		case ZEND_ASSIGN_STATIC_PROP_OP:
 		case ZEND_FRAMELESS_ICALL_3:
 			next = opline + 1;

@@ -327,6 +327,9 @@ static bool opline_supports_assign_contraction(
 
 	/* Frameless calls override the return value, but the return value may overlap with the arguments. */
 	switch (opline->opcode) {
+		case ZEND_FRAMELESS_ICALL_4:
+			if ((opline + 1)->op2_type == IS_CV && (opline + 1)->op2.var == cv_var) return 0;
+			ZEND_FALLTHROUGH;
 		case ZEND_FRAMELESS_ICALL_3:
 			if ((opline + 1)->op1_type == IS_CV && (opline + 1)->op1.var == cv_var) return 0;
 			ZEND_FALLTHROUGH;

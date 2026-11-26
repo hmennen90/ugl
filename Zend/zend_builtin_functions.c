@@ -2002,6 +2002,11 @@ ZEND_API void zend_fetch_debug_backtrace(zval *return_value, int skip_last, int 
 				zval *arg = zend_get_zval_ptr(op_data, op_data->op1_type, &op_data->op1, call);
 				if (Z_TYPE_P(arg) == IS_UNDEF) goto not_frameless_call;
 			}
+			if (num_args >= 4) {
+				const zend_op *op_data = opline + 1;
+				zval *arg = zend_get_zval_ptr(op_data, op_data->op2_type, &op_data->op2, call);
+				if (Z_TYPE_P(arg) == IS_UNDEF) goto not_frameless_call;
+			}
 			zend_function *func = ZEND_FLF_FUNC(opline);
 			/* Assume frameless functions are not recursive with themselves.
 			 * This condition may be true when observers are enabled:
@@ -2050,6 +2055,12 @@ ZEND_API void zend_fetch_debug_backtrace(zval *return_value, int skip_last, int 
 				if (num_args >= 3) {
 					const zend_op *op_data = opline + 1;
 					zval *arg = zend_get_zval_ptr(op_data, op_data->op1_type, &op_data->op1, call);
+					Z_TRY_ADDREF_P(arg);
+					zend_hash_next_index_insert_new(args, arg);
+				}
+				if (num_args >= 4) {
+					const zend_op *op_data = opline + 1;
+					zval *arg = zend_get_zval_ptr(op_data, op_data->op2_type, &op_data->op2, call);
 					Z_TRY_ADDREF_P(arg);
 					zend_hash_next_index_insert_new(args, arg);
 				}

@@ -3856,6 +3856,7 @@ static zend_always_inline zend_result _zend_update_type_info(
 		case ZEND_FRAMELESS_ICALL_1:
 		case ZEND_FRAMELESS_ICALL_2:
 		case ZEND_FRAMELESS_ICALL_3:
+		case ZEND_FRAMELESS_ICALL_4:
 			if (ssa_op->op1_def >= 0) {
 				ZEND_ASSERT(ssa_op->op1_use >= 0);
 				tmp = ssa->var_info[ssa_op->op1_use].type;
@@ -3872,7 +3873,7 @@ static zend_always_inline zend_result _zend_update_type_info(
 				}
 				UPDATE_SSA_TYPE(tmp, ssa_op->op2_def);
 			}
-			if (opline->opcode == ZEND_FRAMELESS_ICALL_3) {
+			if (opline->opcode == ZEND_FRAMELESS_ICALL_3 || opline->opcode == ZEND_FRAMELESS_ICALL_4) {
 				zend_ssa_op *next_ssa_op = ssa_op + 1;
 				if (next_ssa_op->op1_def >= 0) {
 					ZEND_ASSERT(next_ssa_op->op1_use >= 0);
@@ -3881,6 +3882,14 @@ static zend_always_inline zend_result _zend_update_type_info(
 						tmp |= MAY_BE_RCN;
 					}
 					UPDATE_SSA_TYPE(tmp, next_ssa_op->op1_def);
+				}
+				if (opline->opcode == ZEND_FRAMELESS_ICALL_4 && next_ssa_op->op2_def >= 0) {
+					ZEND_ASSERT(next_ssa_op->op2_use >= 0);
+					tmp = ssa->var_info[next_ssa_op->op2_use].type;
+					if (tmp & MAY_BE_RC1) {
+						tmp |= MAY_BE_RCN;
+					}
+					UPDATE_SSA_TYPE(tmp, next_ssa_op->op2_def);
 				}
 			}
 			ZEND_FALLTHROUGH;
