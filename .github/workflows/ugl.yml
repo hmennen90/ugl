@@ -1,0 +1,105 @@
+name: UGL
+on:
+  push:
+    branches: [ugl/main, 'ci/**']
+  pull_request:
+    branches: [ugl/main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ugl-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONFIGURE_FLAGS: >-
+    --disable-all --enable-cli --enable-ugl --enable-opcache --enable-ctype --enable-tokenizer
+    --enable-filter --enable-mbstring --enable-posix --enable-sockets --enable-pcntl
+
+jobs:
+  unix:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64-nts, os: ubuntu-24.04, zts: "" }
+          - { name: linux-x86_64-zts, os: ubuntu-24.04, zts: --enable-zts }
+          - { name: linux-arm64-nts, os: ubuntu-24.04-arm, zts: "" }
+          - { name: linux-arm64-zts, os: ubuntu-24.04-arm, zts: --enable-zts }
+          - { name: macos-arm64-nts, os: macos-15, zts: "" }
+          - { name: macos-arm64-zts, os: macos-15, zts: --enable-zts }
+          - { name: macos-x86_64-nts, os: macos-15-intel, zts: "" }
+    steps:
+      - uses: actions/checkout@v6
+      - name: Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends autoconf bison re2c pkg-config build-essential
+      - name: Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool bison re2c pkg-config
+      - name: Build
+        run: |
+          [ "$RUNNER_OS" = macOS ] && export PATH="$(brew --prefix bison)/bin:$PATH"
+          ./buildconf --force
+          ./configure $CONFIGURE_FLAGS ${{ matrix.zts }}
+          make -j"$(getconf _NPROCESSORS_ONLN)"
+      - name: Smoke test
+        run: |
+          sapi/cli/ugl -v
+          sapi/cli/ugl -r 'echo UGL_VERSION, " ", get_class(vec3(1,2,3)), " ", dot(vec3(1,2,3), vec3(4,5,6)), "\n";'
+      - name: Tests (interpreter)
+        run: |
+          make test TESTS="Zend/tests/ugl" TEST_PHP_ARGS="-q --show-diff"
+      - name: Tests (tracing JIT)
+        run: |
+          make test TESTS="Zend/tests/ugl" TEST_PHP_ARGS="-q --show-diff -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M -d opcache.jit_hot_loop=1 -d opcache.jit_hot_func=1 -d opcache.file_update_protection=0"
+      - name: Fuzz JIT against interpreter
+        run: benchmark/ugl/fuzz/run-fuzz.sh "$PWD/sapi/cli/ugl" 1 60
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ugl-${{ matrix.name }}
+          path: sapi/cli/ugl
+          retention-days: 14
+
+  windows:
+    name: windows-x64-${{ matrix.zts && 'zts' || 'nts' }}
+    runs-on: windows-2022
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        zts: [true, false]
+    env:
+      PHP_BUILD_CACHE_BASE_DIR: C:\build-cache
+      PHP_BUILD_OBJ_DIR: C:\obj
+      PHP_BUILD_CACHE_SDK_DIR: C:\build-cache\sdk
+      PHP_BUILD_SDK_BRANCH: php-sdk-2.5.0
+      PHP_BUILD_CRT: vs17
+      PLATFORM: x64
+      THREAD_SAFE: ${{ matrix.zts && '1' || '0' }}
+      PARALLEL: -j2
+      ADD_CONF: --enable-ugl --disable-all --enable-cli --enable-opcache --enable-ctype --enable-tokenizer --enable-filter --enable-mbstring
+    steps:
+      - name: git config
+        run: git config --global core.autocrlf false && git config --global core.eol lf
+      - uses: actions/checkout@v6
+      - name: Build
+        run: .github/scripts/windows/build.bat
+      - name: Smoke test
+        shell: cmd
+        run: |
+          for /d %%d in (C:\obj\Release*) do (
+            %%d\ugl.exe -v
+            %%d\ugl.exe -r "echo UGL_VERSION, ' ', dot(vec3(1,2,3), vec3(4,5,6)), PHP_EOL;"
+          )
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ugl-windows-x64-${{ matrix.zts && 'zts' || 'nts' }}
+          path: C:\obj\Release*\ugl.exe

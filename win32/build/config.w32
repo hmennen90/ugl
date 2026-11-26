@@ -51,6 +51,10 @@ if (PHP_PGI == "yes" || PHP_PGO != "no") {
 }
 
 ARG_ENABLE('zts', 'Thread safety', 'yes');
+ARG_ENABLE('ugl', 'UGL language extensions (float32, int32, vec2/3/4, mat4, profiles)', 'no');
+if (PHP_UGL == 'yes') {
+	AC_DEFINE('ZEND_UGL', 1, 'Define to 1 to enable the UGL language extensions.');
+}
 // Configures the hard-coded installation dir
 ARG_WITH('prefix', 'where PHP will be installed', '');
 if (PHP_PREFIX == '') {
