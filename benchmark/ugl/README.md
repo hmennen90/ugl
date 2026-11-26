@@ -9,7 +9,7 @@ Benchmarks for the UGL types. `types_vec_lang.php.in` has the placeholders
 
 The tracing JIT compiles runs of vector arithmetic as one unit (`zend_jit_ugl_vec_chain`):
 `$p = $p + $v * $dt`, `$p += ...`, `mat4` products, swizzles such as `$v->zyx`, `vec2()` / `vec3()`
-calls and vectors in typed properties (`$this->pos += $this->vel * $dt`). Every operand is checked
+`vec4()` calls, `$v->dot($w)` / `dot($a, $b)` and vectors in typed properties (`$this->pos += $this->vel * $dt`). Every operand is checked
 at run time; anything unexpected runs the original opcodes.
 
 - `vec_jit.ugl` times the cases (best of 5, milliseconds for 2M iterations). Run it with
@@ -26,6 +26,8 @@ at run time; anything unexpected runs the original opcodes.
   compiles them and checks every thread against the interpreter. `THR` is built from `threads/thr.c`
   (the comment at its top has the commands). The default is 24 programs, 3 rounds: 576 thread runs.
 
-Not compiled: `$v->dot($w)` and `vec4()` stay calls with a frame (a faster argument path only),
-`$this->pos = $other` keeps the identity of the object and so stays a plain assignment, and
-properties that are readonly, have asymmetric visibility or are not typed `vec2`/`vec3`/`vec4`/`mat4`.
+Not compiled: `$this->pos = $other` keeps the identity of the object and so stays a plain assignment,
+and properties that are readonly, have asymmetric visibility or are not typed
+`vec2`/`vec3`/`vec4`/`mat4`. A standalone `$d = $a->dot($b)` is one opcode without a call, but not
+fused with anything. `$v->dot($w)` is compiled to one opcode only for a plain variable with a simple
+argument; a user class with a `dot(&$x)` method gets the value and the usual warning from that form.
