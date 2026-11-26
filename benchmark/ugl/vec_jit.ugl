@@ -1,0 +1,39 @@
+// Vector arithmetic under the tracing JIT: what the compiled runs (zend_jit_ugl_vec_chain) cover.
+//
+//   ugl -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M \
+//       -d opcache.file_update_protection=0 benchmark/ugl/vec_jit.ugl
+//
+// Run it with opcache.enable_cli=0 for the interpreter. opcache.file_update_protection=0 matters:
+// without it a file written in the last two seconds is not cached and never reaches the JIT.
+// Times are milliseconds for 2,000,000 iterations, best of 5.
+final class Body {
+	public function __construct(public vec3 $pos, public vec3 $vel) {}
+	public function step(float $dt): void { $this->pos += $this->vel * $dt; }
+	public function step2(float $dt): void { $this->pos = $this->pos + $this->vel * $dt; }
+}
+$N = 2_000_000;
+$M = mat4(1,0,0,0, 0,1,0,0, 0,0,1,0, 5,6,7,1);
+$cases = [
+	'a + b (vec3)'          => function () use ($N) { $a = vec3(1,2,3); $b = vec3(.5,.25,2); for ($i=0;$i<$N;$i++) $c = $a + $b; },
+	'a + b (vec2)'          => function () use ($N) { $a = vec2(1,2); $b = vec2(.5,.25); for ($i=0;$i<$N;$i++) $c = $a + $b; },
+	'a * 0.5'               => function () use ($N) { $a = vec3(1,2,3); for ($i=0;$i<$N;$i++) $c = $a * 0.5; },
+	'a += b'                => function () use ($N) { $a = vec4(1,2,3,4); $b = vec4(.5,.25,2,1); for ($i=0;$i<$N;$i++) $a += $b; },
+	'p += v * dt (chain)'   => function () use ($N) { $p = vec3(0,0,0); $v = vec3(1,2,3); for ($i=0;$i<$N;$i++) $p += $v * 0.016; },
+	'p = p + v * dt'        => function () use ($N) { $p = vec3(0,0,0); $v = vec3(1,2,3); for ($i=0;$i<$N;$i++) $p = $p + $v * 0.016; },
+	'vec2(x, y)'            => function () use ($N) { for ($i=0;$i<$N;$i++) $c = vec2(1, 2); },
+	'vec3(x, y, z)'         => function () use ($N) { $x=1.5;$y=2.5;$z=3.5; for ($i=0;$i<$N;$i++) $c = vec3($x, $y, $z); },
+	'vec4(x, y, z, w)'      => function () use ($N) { for ($i=0;$i<$N;$i++) $c = vec4(1, 2, 3, 4); },
+	'mat4 * vec4'           => function () use ($N, $M) { $v = vec4(1,2,3,1); for ($i=0;$i<$N;$i++) $r = $M * $v; },
+	'mat4 * mat4'           => function () use ($N, $M) { for ($i=0;$i<$N;$i++) $r = $M * $M; },
+	'M * v * 0.5 + v'       => function () use ($N, $M) { $v = vec4(1,2,3,1); for ($i=0;$i<$N;$i++) $r = $M * $v * 0.5 + $v; },
+	'a->zyx'                => function () use ($N) { $a = vec3(1,2,3); for ($i=0;$i<$N;$i++) $r = $a->zyx; },
+	'a->zyx * 2 + a'        => function () use ($N) { $a = vec3(1,2,3); for ($i=0;$i<$N;$i++) $r = $a->zyx * 2.0 + $a; },
+	'this->pos += vel * dt' => function () use ($N) { $b = new Body(vec3(0,0,0), vec3(1,2,3)); for ($i=0;$i<$N;$i++) $b->step(0.016); },
+	'this->pos = pos + ..'  => function () use ($N) { $b = new Body(vec3(0,0,0), vec3(1,2,3)); for ($i=0;$i<$N;$i++) $b->step2(0.016); },
+	'a->dot(b) (a call)'    => function () use ($N) { $a = vec4(1,2,3,4); $b = vec4(4,3,2,1); for ($i=0;$i<$N;$i++) $r = $a->dot($b); },
+];
+foreach ($cases as $name => $f) {
+	$best = PHP_FLOAT_MAX;
+	for ($j = 0; $j < 5; $j++) { $t = hrtime(true); $f(); $best = min($best, (hrtime(true) - $t) / 1e6); }
+	printf("  %-24s %8.2f ms\n", $name, $best);
+}
