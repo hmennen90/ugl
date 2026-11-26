@@ -135,6 +135,19 @@ function broken(): string {
     return implode(',', array_count_values($r) ? array_map(fn($k, $n) => "$k=$n", array_keys(array_count_values($r)), array_count_values($r)) : []);
 }
 echo broken(), "\n";
+
+// The target is still unset when the trace is recorded (first iteration), and holds a scalar later.
+function fresh(): string {
+    $a = vec3(1, 2, 3); $b = vec3(0.5, 0.25, 2); $s = '';
+    for ($i = 0; $i < 80; $i++) {
+        $c = $a + $b * 2.0;
+        $s .= bits($c);
+        if ($i === 40) { $c = 5; }               // not a vector any more: the next round allocates
+        if ($i === 41) { $s .= gettype($c); }
+    }
+    return md5($s);
+}
+echo fresh(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -155,3 +168,4 @@ float(3)
 7841ad64461617747e73a0a3d4ef1348 e4388e3fe4388e3fe4388e3fe4388e3f
 8111e6a4e1a6d08f448059b3b6277c63 becce5426dc6a14358268444 5dbb9a425bdb59433df63144
 vec3=50,TypeError=10
+8375eada230b13ec3f66092597502f2c

@@ -559,9 +559,11 @@ static bool zend_jit_ugl_scan_chain(zend_jit_trace_rec *vm, zend_jit_ugl_step *s
 				steps[k].stype[0] = st1; steps[k].stype[1] = st2;
 				break;
 			case ZEND_ASSIGN:
+				/* The target may still be unset or hold something else when the trace is recorded:
+				 * the generated code checks it, and the handlers run if it is not a vector. */
 				if (opline->op1_type != IS_CV || opline->op2_type != IS_TMP_VAR
 				 || opline->result_type != IS_UNUSED || !ce
-				 || rec->op1_type != IS_OBJECT || ce1 != ce
+				 || (rec->op1_type & (IS_TRACE_REFERENCE|IS_TRACE_INDIRECT))
 				 || nenv != 1 || env_var[0] != opline->op2.var) {
 					return false;
 				}
