@@ -227,6 +227,24 @@ function dotErrors(): string {
     return implode('|', array_unique(array_map('strval', $r)));
 }
 echo dotErrors(), "\n";
+
+// Float and integer variables the loop changes with plain arithmetic are read in their current value.
+function loopCarried(): string {
+    $a = vec3(1, 2, 3); $c = vec3(0, 0, 0); $f = 0.5; $g = 1.25; $n = 3; $s = 0.0; $t = 0.0; $out = '';
+    for ($i = 0; $i < 200; $i++) {
+        $c = $a * $f;
+        $s = $s + $f * 2.0;
+        $c = $c + $a * ($g * $f);
+        $t = $t + $g;
+        $d = vec3($f, $g, $n) + $a * $n;
+        $out .= bits($c) . bits($d);
+        $f = $f + 0.001;
+        $g = $g * 1.0001;
+        $n = $n + 1;
+    }
+    return md5($out) . ' ' . $s . ' ' . $t;
+}
+echo loopCarried(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -253,3 +271,4 @@ e6ff19b1df3b7c5ffd2989db3fb85f2a
 ok|vec2(): Argument #2 ($y) must be of type float, null given|vec3(): Argument #1 ($x) must be of type float, string given
 5b5f683d74b1690551affafcf5ec8ac6
 6|dot() expects exactly 2 arguments, 1 given|dot(): Argument #2 ($b) must be of type vec3, vec2 given
+6648b6de13094cfd78415daa4ea109bb 239.8 252.50399867418

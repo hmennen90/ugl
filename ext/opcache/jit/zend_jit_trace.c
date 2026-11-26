@@ -614,6 +614,43 @@ static void zend_jit_ugl_drop_env(zend_jit_ugl_env *env, int *nenv, int *used, i
 	}
 }
 
+/* The compiled run reads the float and integer variables it uses from memory. The register
+ * allocator may hold such a variable in a register and write it back later (a loop counter, a value
+ * the loop changes with plain arithmetic): store it now, and write its type tag when only the
+ * trace knew it. */
+static int zend_jit_ugl_flush_scalars(zend_jit_ctx *jit, zend_jit_trace_stack *stack, const zend_jit_ugl_step *steps, int n)
+{
+	for (int k = 0; k < n; k++) {
+		for (int o = 0; o < 3; o++) {
+			uint32_t var;
+			bool from_data = (o == 2) || (o == 1 && steps[k].data_op && !steps[k].ctor);
+
+			if (steps[k].kind[o] != ZEND_JIT_UGL_SCALAR_CV) {
+				continue;
+			}
+			var = from_data ? (steps[k].opline + 1)->op1.var : (o == 0 ? steps[k].opline->op1.var : steps[k].opline->op2.var);
+			{
+				int slot = EX_VAR_TO_NUM(var);
+				int32_t ref = STACK_REF(stack, slot);
+				uint8_t type = STACK_TYPE(stack, slot);
+
+				if (ref && (type == IS_LONG || type == IS_DOUBLE)) {
+					if (!zend_jit_store_ref(jit, 1 << type, slot, ref, STACK_MEM_TYPE(stack, slot) != type)) {
+						return 0;
+					}
+					SET_STACK_TYPE(stack, slot, type, 1);
+				} else if ((type == IS_LONG || type == IS_DOUBLE) && STACK_MEM_TYPE(stack, slot) != type) {
+					if (!zend_jit_store_type(jit, slot, type)) {
+						return 0;
+					}
+					SET_STACK_TYPE(stack, slot, type, 1);
+				}
+			}
+		}
+	}
+	return 1;
+}
+
 /* Looks ahead from a ZEND_ADD / SUB / MUL / DIV / ASSIGN_OP / ASSIGN_OBJ_OP / FETCH_OBJ_R record for a
  * run of vector arithmetic that ends in an assignment (see zend_jit_ugl_vec_chain). Operands are
  * vec2 / vec3 / vec4 / mat4 variables, vectors in typed properties, numbers, swizzles of a vector,
@@ -3341,6 +3378,39 @@ propagate_arg:
 #define RA_IVAL_DEL(var)          do {ra[var].ref = IR_UNUSED;} while (0)
 #define RA_HAS_REG(var)           (ra[var].ref != 0)
 #define RA_REG_FLAGS(var)         ra[var].flags
+
+#ifdef ZEND_UGL
+/* A compiled run (zend_jit_ugl_vec_chain) takes the float and integer variables it uses from memory and
+ * replaces the opcodes that would have loaded them into a register. When the register allocator gave
+ * one of them a register, a later opcode expects that load: such a run is left to the normal opcodes. */
+static bool zend_jit_ugl_scalar_has_register(zend_jit_reg_var *ra, const zend_op *head, const zend_ssa_op *head_ssa_op,
+		const zend_jit_ugl_step *steps, int n)
+{
+	if (!ra || !head_ssa_op) {
+		return false;
+	}
+	for (int k = 0; k < n; k++) {
+		const zend_ssa_op *so = head_ssa_op + (steps[k].opline - head);
+
+		for (int o = 0; o < 3; o++) {
+			int ssa_var;
+
+			if (steps[k].kind[o] != ZEND_JIT_UGL_SCALAR_CV) {
+				continue;
+			}
+			if ((o == 2) || (o == 1 && steps[k].data_op && !steps[k].ctor)) {
+				ssa_var = (so + 1)->op1_use;
+			} else {
+				ssa_var = o == 0 ? so->op1_use : so->op2_use;
+			}
+			if (ssa_var >= 0 && RA_HAS_REG(ssa_var)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+#endif
 #define RA_REG_START(var, line)   do {ra[var].ref = IR_NULL;} while (0)
 #define RA_REG_DEL(var)           do {ra[var].ref = IR_UNUSED;} while (0)
 
@@ -5093,9 +5163,10 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 							int n;
 							zend_class_entry *vce;
 
-							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)
+							 && !zend_jit_ugl_scalar_has_register(ra, opline, ssa_op, steps, n)) {
 								gen_handler = 1;
-								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+								if (!zend_jit_ugl_flush_scalars(&ctx, stack, steps, n) || !zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
@@ -5253,9 +5324,10 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 							int n;
 							zend_class_entry *vce;
 
-							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)
+							 && !zend_jit_ugl_scalar_has_register(ra, opline, ssa_op, steps, n)) {
 								gen_handler = 1;
-								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+								if (!zend_jit_ugl_flush_scalars(&ctx, stack, steps, n) || !zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
@@ -5453,9 +5525,10 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 							zend_class_entry *vce;
 
 							/* $this->pos += <run> (see zend_jit_ugl_vec_chain) */
-							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)
+							 && !zend_jit_ugl_scalar_has_register(ra, opline, ssa_op, steps, n)) {
 								gen_handler = 1;
-								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+								if (!zend_jit_ugl_flush_scalars(&ctx, stack, steps, n) || !zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
@@ -6642,9 +6715,10 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 							zend_class_entry *vce;
 
 							/* $v->zyx and what is done with it (see zend_jit_ugl_vec_chain) */
-							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)
+							 && !zend_jit_ugl_scalar_has_register(ra, opline, ssa_op, steps, n)) {
 								gen_handler = 1;
-								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+								if (!zend_jit_ugl_flush_scalars(&ctx, stack, steps, n) || !zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
@@ -7091,9 +7165,10 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 							zend_class_entry *vce;
 
 							/* vec2(x, y) / vec3(x, y, z) and what is done with it (see zend_jit_ugl_vec_chain) */
-							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)
+							 && !zend_jit_ugl_scalar_has_register(ra, opline, ssa_op, steps, n)) {
 								gen_handler = 1;
-								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+								if (!zend_jit_ugl_flush_scalars(&ctx, stack, steps, n) || !zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
@@ -7114,9 +7189,10 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 							zend_class_entry *vce;
 
 							/* vec2(x, y) / vec3(x, y, z) and what is done with it (see zend_jit_ugl_vec_chain) */
-							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)
+							 && !zend_jit_ugl_scalar_has_register(ra, opline, ssa_op, steps, n)) {
 								gen_handler = 1;
-								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+								if (!zend_jit_ugl_flush_scalars(&ctx, stack, steps, n) || !zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;

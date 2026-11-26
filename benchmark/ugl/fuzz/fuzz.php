@@ -7,6 +7,7 @@
 //            script  print a complete script instead of running it (run-threads.sh uses this)
 //     PROPS  1       keep about half of the vectors and matrices in typed properties of an object
 //
+// The float and integer variables change in every iteration (the JIT keeps such variables in registers).
 // dot() calls and sums or products of plain floats are part of the scalars.
 // A program is only worth comparing when the interpreter finishes it: run-fuzz.sh counts the seeds
 // that end in an error. The JIT settings are in run-fuzz.sh.
@@ -60,7 +61,7 @@ $outm = ''; foreach ($mats as $m) { $outm .= "pack('g16', ".implode(',', array_m
 // mat4 has no ArrayAccess: read components through a helper
 $propnames = ['a2'=>'vec2','b2'=>'vec2','a3'=>'vec3','b3'=>'vec3','a4'=>'vec4','b4'=>'vec4','m'=>'mat4','n'=>'mat4','k'=>'mat4'];
 $usep = (int)($argv[4] ?? 0);
-$code = "function mbits(\$m) { \$s=''; foreach ([vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)] as \$e) { \$c = \$m * \$e; \$s .= pack('g4', \$c->x, \$c->y, \$c->z, \$c->w); } return \$s; }\nfunction run() {\n  \$a2=".vlit(2)."; \$b2=".vlit(2)."; \$a3=".vlit(3)."; \$b3=".vlit(3)."; \$a4=".vlit(4)."; \$b4=".vlit(4)."; \$m=".mlit()."; \$n=".mlit()."; \$k=".mlit()."; \$f=0.25; \$g=3; \$h=-12345678901; \$out=[];\n  for (\$i=0;\$i<100;\$i++) {\n$body    if (\$i==60) { \$keep=\$a3; \$keep2=\$m; }\n    if (\$i==80) { \$f=2; \$g=0.5; }\n    \$out[] = ".$out."'';\n  }\n  return md5(implode('', \$out)).md5(mbits(\$m).mbits(\$n).mbits(\$k));\n}\n";
+$code = "function mbits(\$m) { \$s=''; foreach ([vec4(1,0,0,0), vec4(0,1,0,0), vec4(0,0,1,0), vec4(0,0,0,1)] as \$e) { \$c = \$m * \$e; \$s .= pack('g4', \$c->x, \$c->y, \$c->z, \$c->w); } return \$s; }\nfunction run() {\n  \$a2=".vlit(2)."; \$b2=".vlit(2)."; \$a3=".vlit(3)."; \$b3=".vlit(3)."; \$a4=".vlit(4)."; \$b4=".vlit(4)."; \$m=".mlit()."; \$n=".mlit()."; \$k=".mlit()."; \$f=0.25; \$g=3; \$h=-12345678901; \$out=[];\n  for (\$i=0;\$i<100;\$i++) {\n$body    \$f = \$f * 1.001 + 0.0001; \$g = \$g + 1; \$h = \$h + 7;\n    if (\$i==60) { \$keep=\$a3; \$keep2=\$m; }\n    if (\$i==80) { \$f=2; \$g=0.5; }\n    \$out[] = ".$out."'';\n  }\n  return md5(implode('', \$out)).md5(mbits(\$m).mbits(\$n).mbits(\$k));\n}\n";
 if ($usep) {
   $cls = "final class O { public vec2 \$a2; public vec2 \$b2; public vec3 \$a3; public vec3 \$b3; public vec4 \$a4; public vec4 \$b4; public mat4 \$m; public mat4 \$n; public mat4 \$k; }\n";
   $pos = strpos($code, 'function run()'); $head = substr($code, 0, $pos); $tail = substr($code, $pos);
