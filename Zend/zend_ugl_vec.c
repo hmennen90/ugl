@@ -478,6 +478,27 @@ static zend_array *ugl_get_properties_for(zend_object *obj, zend_prop_purpose pu
 
 static void ugl_parse_components(INTERNAL_FUNCTION_PARAMETERS, uint8_t dim, double *d)
 {
+	/* Plain floats and integers, the usual call: no parameter parsing. Anything else (too many
+	 * arguments, other types, named arguments) goes the checked way and reports its error. */
+	uint32_t argc = ZEND_CALL_NUM_ARGS(execute_data);
+
+	if (EXPECTED(argc <= dim)) {
+		zval *arg = ZEND_CALL_ARG(execute_data, 1);
+		uint32_t i;
+
+		for (i = 0; i < argc; i++, arg++) {
+			if (EXPECTED(Z_TYPE_P(arg) == IS_DOUBLE)) {
+				d[i] = Z_DVAL_P(arg);
+			} else if (EXPECTED(Z_TYPE_P(arg) == IS_LONG)) {
+				d[i] = (double) Z_LVAL_P(arg);
+			} else {
+				break;
+			}
+		}
+		if (EXPECTED(i == argc)) {
+			return;
+		}
+	}
 	ZEND_PARSE_PARAMETERS_START(0, dim)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_DOUBLE(d[0])
@@ -527,9 +548,15 @@ static ZEND_NAMED_FUNCTION(ugl_vec_dot)
 	zend_object *other;
 	zend_ugl_vec *v = ugl_vec_from_obj(Z_OBJ_P(ZEND_THIS));
 
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_OBJ_OF_CLASS(other, v->std.ce)
-	ZEND_PARSE_PARAMETERS_END();
+	if (EXPECTED(ZEND_CALL_NUM_ARGS(execute_data) == 1)
+	 && EXPECTED(Z_TYPE_P(ZEND_CALL_ARG(execute_data, 1)) == IS_OBJECT)
+	 && EXPECTED(Z_OBJCE_P(ZEND_CALL_ARG(execute_data, 1)) == v->std.ce)) {
+		other = Z_OBJ_P(ZEND_CALL_ARG(execute_data, 1));
+	} else {
+		ZEND_PARSE_PARAMETERS_START(1, 1)
+			Z_PARAM_OBJ_OF_CLASS(other, v->std.ce)
+		ZEND_PARSE_PARAMETERS_END();
+	}
 
 	zend_ugl_vec *o = ugl_vec_from_obj(other);
 	float sum = 0;
