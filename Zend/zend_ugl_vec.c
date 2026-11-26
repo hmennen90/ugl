@@ -33,12 +33,6 @@ ZEND_API zend_class_entry *zend_ce_ugl_mat4;
 static zend_object_handlers ugl_vec_handlers;
 static zend_object_handlers ugl_mat_handlers;
 
-typedef struct _zend_ugl_mat {
-	float       m[16]; /* column-major: m[column * 4 + row] */
-	bool        initialized;
-	zend_object std;
-} zend_ugl_mat;
-
 static zend_always_inline zend_ugl_vec *ugl_vec_from_obj(zend_object *obj)
 {
 	return (zend_ugl_vec *) ((char *) obj - XtOffsetOf(zend_ugl_vec, std));

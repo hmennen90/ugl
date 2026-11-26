@@ -804,6 +804,9 @@ typedef struct _zend_jit_ugl_step {
 	zend_jit_trace_rec *rec;      /* its ZEND_JIT_TRACE_VM record */
 	uint8_t          kind[2];     /* ZEND_JIT_UGL_* of op1 and op2 */
 	uint8_t          stype[2];    /* recorded zval type of a scalar variable */
+	zend_class_entry *ce[2];      /* class of a vec / mat variable operand (kind VEC_CV) */
+	uint8_t          swz[4];      /* ZEND_FETCH_OBJ_R of a swizzle: component indexes */
+	uint8_t          nswz;
 } zend_jit_ugl_step;
 #endif
 

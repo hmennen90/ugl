@@ -148,6 +148,36 @@ function fresh(): string {
     return md5($s);
 }
 echo fresh(), "\n";
+
+// mat4 and swizzles inside runs, with negative zero, infinities and a shared target.
+function mbits(mat4 $m): string {
+    $s = '';
+    foreach ([vec4(1, 0, 0, 0), vec4(0, 1, 0, 0), vec4(0, 0, 1, 0), vec4(0, 0, 0, 1)] as $e) {
+        $c = $m * $e;
+        $s .= bits($c);
+    }
+    return $s;
+}
+function matrices(): string {
+    $m = mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, -0.0, 7, 1);
+    $n = mat4(0.5, -0.0, 2, 0, 0.25, 1, 0, 3, 0, 0, 1e30, 0, 1, 2, 3, 1);
+    $v = vec4(1.5, -2.25, 3, 1); $a = vec3(0.1, -0.0, 3); $r = vec4(0, 0, 0, 0); $q = mat4(); $z = vec3(0, 0, 0);
+    $s = '';
+    for ($i = 0; $i < 80; $i++) {
+        $r = $m * $v;
+        $q = $m * $n;
+        $r = $v * $n + $m * $v * 0.5;
+        $m = $m * 0.5 + $n * 0.25;
+        $z = $a->zyx * 2.0 + $a;
+        $r = $r + $a->xyzx;
+        $n *= $m;
+        $v *= $q;
+        if ($i === 40) { $keep = $q; }
+        $s .= bits($r) . bits($z) . bits($v) . mbits($q);
+    }
+    return md5($s . mbits($m) . mbits($n) . mbits($keep));
+}
+echo matrices(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -169,3 +199,4 @@ float(3)
 8111e6a4e1a6d08f448059b3b6277c63 becce5426dc6a14358268444 5dbb9a425bdb59433df63144
 vec3=50,TypeError=10
 8375eada230b13ec3f66092597502f2c
+cf94511f6bfdad085f96c25310eec4a8

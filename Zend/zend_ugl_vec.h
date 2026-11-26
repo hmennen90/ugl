@@ -30,6 +30,17 @@ typedef struct _zend_ugl_vec {
 	zend_object std;
 } zend_ugl_vec;
 
+/* mat4: final, immutable, 16 float32 components, column-major: m[column * 4 + row]. */
+typedef struct _zend_ugl_mat {
+	float       m[16];
+	bool        initialized;
+	zend_object std;
+} zend_ugl_mat;
+
+/* Offset of m[0] relative to the zend_object pointer. */
+#define ZEND_UGL_MAT_M_OFFSET \
+	((intptr_t) XtOffsetOf(zend_ugl_mat, m) - (intptr_t) XtOffsetOf(zend_ugl_mat, std))
+
 /* Offset of c[0] relative to the zend_object pointer. */
 #define ZEND_UGL_VEC_C_OFFSET \
 	((intptr_t) XtOffsetOf(zend_ugl_vec, c) - (intptr_t) XtOffsetOf(zend_ugl_vec, std))

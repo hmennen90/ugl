@@ -17380,27 +17380,106 @@ static int zend_jit_trace_handler(zend_jit_ctx *jit, const zend_op_array *op_arr
  *     $r = $a <op> $b;                 ADD, ASSIGN
  *     $p = $p + $v * 0.016;            MUL, ADD, ASSIGN
  *     $p += $v * 0.016;                MUL, ASSIGN_OP
+ *     $d = $a->zyx * 2.0;              FETCH_OBJ_R, MUL, ASSIGN
+ *     $r = $m * $v;                    MUL, ASSIGN (mat4 * vec4)
  *
- * The operands are variables holding vec2 / vec3 / vec4 (the class is known from the recorded
- * trace), floats or ints (variables or constants), and the temporaries of earlier steps. The
- * components are computed in float32 and kept in registers; only the final result is stored,
- * into the vector the target variable already holds. The target has to hold a vector of the same
- * class that nothing else references, and every operand has to have the recorded type, else the
- * original handlers run one after the other, so the result is the same either way. */
-static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_array,
-		const zend_jit_ugl_step *steps, int n, zend_class_entry *ce)
+ * The operands are variables holding vec2 / vec3 / vec4 / mat4 (the class is known from the
+ * recorded trace), floats or ints (variables or constants), swizzles of a vector, and the
+ * temporaries of earlier steps. The components are computed in float32 and kept in registers;
+ * only the final result is stored, into the vector or matrix the target variable already holds.
+ * The target has to hold an object of the result's class that nothing else references, and every
+ * operand has to have the recorded type, else the original handlers run one after the other, so
+ * the result is the same either way. The arithmetic mirrors zend_ugl_vec.c operation by operation
+ * (same order of additions, no fused multiply-add), so the bits are the same. */
+typedef struct {
+	zend_class_entry *ce;   /* NULL: a number, in lane[0] */
+	ir_ref            lane[16];
+} zend_jit_ugl_val;
+
+static uint32_t zend_jit_ugl_ce_lanes(const zend_class_entry *ce)
 {
-	typedef struct { uint32_t var; ir_ref lane[4]; } tmp_t;
-	struct { uint32_t var; uint8_t type; ir_ref obj; ir_ref scalar; } cv[2 * ZEND_JIT_UGL_MAX_CHAIN + 1];
-	tmp_t tmp[ZEND_JIT_UGL_MAX_CHAIN];
+	return ce == zend_ce_ugl_mat4 ? 16 : (ce == zend_ce_ugl_vec4 ? 4 : (ce == zend_ce_ugl_vec3 ? 3 : 2));
+}
+
+static uintptr_t zend_jit_ugl_lane_offset(const zend_class_entry *ce, uint32_t i)
+{
+	return (uintptr_t) ((ce == zend_ce_ugl_mat4 ? ZEND_UGL_MAT_M_OFFSET : ZEND_UGL_VEC_C_OFFSET) + 4 * i);
+}
+
+static ir_ref zend_jit_ugl_fop(zend_jit_ctx *jit, uint8_t op, ir_ref x, ir_ref y)
+{
+	switch (op) {
+		case ZEND_ADD: return ir_ADD_F(x, y);
+		case ZEND_SUB: return ir_SUB_F(x, y);
+		case ZEND_MUL: return ir_MUL_F(x, y);
+		default:       return ir_DIV_F(x, y);
+	}
+}
+
+/* r = a <op> b, for the class combinations zend_jit_ugl_binop_ce() accepts. */
+static void zend_jit_ugl_binop(zend_jit_ctx *jit, uint8_t op, const zend_jit_ugl_val *a, const zend_jit_ugl_val *b, zend_jit_ugl_val *r)
+{
+	zend_class_entry *mat = zend_ce_ugl_mat4;
+
+	if (a->ce == mat && b->ce == mat && op == ZEND_MUL) {
+		/* out[j * 4 + i] = sum over k of a[k * 4 + i] * b[j * 4 + k], summed from 0 in order */
+		r->ce = mat;
+		for (int j = 0; j < 4; j++) {
+			for (int i = 0; i < 4; i++) {
+				ir_ref sum = ir_CONST_FLOAT(0);
+
+				for (int k = 0; k < 4; k++) {
+					sum = ir_ADD_F(sum, ir_MUL_F(a->lane[k * 4 + i], b->lane[j * 4 + k]));
+				}
+				r->lane[j * 4 + i] = sum;
+			}
+		}
+	} else if (a->ce == mat && b->ce == zend_ce_ugl_vec4) {
+		r->ce = zend_ce_ugl_vec4;
+		for (int i = 0; i < 4; i++) {
+			ir_ref sum = ir_CONST_FLOAT(0);
+
+			for (int k = 0; k < 4; k++) {
+				sum = ir_ADD_F(sum, ir_MUL_F(a->lane[k * 4 + i], b->lane[k]));
+			}
+			r->lane[i] = sum;
+		}
+	} else if (a->ce == zend_ce_ugl_vec4 && b->ce == mat) {
+		r->ce = zend_ce_ugl_vec4;
+		for (int j = 0; j < 4; j++) {
+			ir_ref sum = ir_CONST_FLOAT(0);
+
+			for (int k = 0; k < 4; k++) {
+				sum = ir_ADD_F(sum, ir_MUL_F(a->lane[k], b->lane[j * 4 + k]));
+			}
+			r->lane[j] = sum;
+		}
+	} else {
+		/* Component by component; a number is used for every component. */
+		zend_class_entry *ce = a->ce ? a->ce : b->ce;
+		uint32_t n = zend_jit_ugl_ce_lanes(ce);
+
+		r->ce = ce;
+		for (uint32_t i = 0; i < n; i++) {
+			r->lane[i] = zend_jit_ugl_fop(jit, op, a->ce ? a->lane[i] : a->lane[0], b->ce ? b->lane[i] : b->lane[0]);
+		}
+	}
+}
+
+static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_array,
+		const zend_jit_ugl_step *steps, int n, zend_class_entry *target_ce)
+{
+	struct { uint32_t var; uint8_t type; zend_class_entry *ce; ir_ref obj; ir_ref scalar; } cv[2 * ZEND_JIT_UGL_MAX_CHAIN + 1];
+	struct { uint32_t var; zend_jit_ugl_val val; } tmp[ZEND_JIT_UGL_MAX_CHAIN];
 	int ncv = 0, ntmp = 0;
-	int dim = ce == zend_ce_ugl_vec4 ? 4 : (ce == zend_ce_ugl_vec3 ? 3 : 2);
 	const zend_op *last = steps[n - 1].opline;
 	const zend_op *head = steps[0].opline;
 	uint32_t target_var = last->op1.var;
+	uint32_t tlanes = zend_jit_ugl_ce_lanes(target_ce);
 	ir_ref slow_inputs = IR_UNUSED, fast_inputs = IR_UNUSED;
 	ir_ref obj_t = IR_UNUSED;
-	ir_ref final_lane[4];
+	zend_jit_ugl_val final_val;
+	bool final_set = false;
 
 	zend_jit_set_ip(jit, head);
 
@@ -17411,7 +17490,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 		ir_IF_TRUE(_if); \
 	} while (0)
 
-	/* Every variable operand once: its type, and for a vector its class. */
+	/* Every variable operand once: its type, and for an object its class. */
 	for (int k = 0; k < n; k++) {
 		for (int o = 0; o < 2; o++) {
 			uint8_t kind = steps[k].kind[o];
@@ -17430,6 +17509,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			if (!seen) {
 				cv[ncv].var = var;
 				cv[ncv].type = kind == ZEND_JIT_UGL_VEC_CV ? IS_OBJECT : steps[k].stype[o];
+				cv[ncv].ce = kind == ZEND_JIT_UGL_VEC_CV ? steps[k].ce[o] : NULL;
 				ncv++;
 			}
 		}
@@ -17446,6 +17526,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 		if (!seen) {
 			cv[ncv].var = target_var;
 			cv[ncv].type = IS_OBJECT;
+			cv[ncv].ce = target_ce;
 			ncv++;
 		}
 	}
@@ -17455,7 +17536,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 		UGL_REQUIRE(ir_EQ(jit_Z_TYPE(jit, addr), ir_CONST_U8(cv[c].type)));
 		if (cv[c].type == IS_OBJECT) {
 			cv[c].obj = jit_Z_PTR(jit, addr);
-			UGL_REQUIRE(ir_EQ(ir_LOAD_A(ir_ADD_OFFSET(cv[c].obj, offsetof(zend_object, ce))), ir_CONST_ADDR(ce)));
+			UGL_REQUIRE(ir_EQ(ir_LOAD_A(ir_ADD_OFFSET(cv[c].obj, offsetof(zend_object, ce))), ir_CONST_ADDR(cv[c].ce)));
 			if (cv[c].var == target_var) {
 				obj_t = cv[c].obj;
 			}
@@ -17471,97 +17552,124 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 		ir_LOAD_U32(ir_ADD_OFFSET(obj_t, offsetof(zend_refcounted_h, u.type_info))),
 		ir_CONST_U32(IS_OBJ_WEAKLY_REFERENCED << GC_FLAGS_SHIFT)), ir_CONST_U32(0)));
 
-	/* The arithmetic: components of an operand for lane i. */
-#define UGL_OPERAND(KIND, VAR, CONSTZV, LANE, OUT) do { \
-		switch (KIND) { \
+#define UGL_FIND_CV(VAR, IDX) do { IDX = -1; for (int _fc = 0; _fc < ncv; _fc++) { if (cv[_fc].var == (VAR)) { IDX = _fc; } } } while (0)
+
+	/* The value of one operand. Everything is loaded before anything is stored: the target may
+	 * be an operand. */
+#define UGL_OPERAND(OUT, STEP, O) do { \
+		uint8_t _kind = (STEP)->kind[O]; \
+		const zend_op *_op = (STEP)->opline; \
+		uint32_t _var = (O) == 0 ? _op->op1.var : _op->op2.var; \
+		int _c; \
+		switch (_kind) { \
 			case ZEND_JIT_UGL_VEC_CV: \
-				for (int c = 0; c < ncv; c++) { \
-					if (cv[c].var == (VAR)) { \
-						OUT = ir_LOAD_F(ir_ADD_OFFSET(cv[c].obj, (uintptr_t) (ZEND_UGL_VEC_C_OFFSET + 4 * (LANE)))); \
-					} \
+				UGL_FIND_CV(_var, _c); \
+				(OUT).ce = cv[_c].ce; \
+				for (uint32_t _i = 0; _i < zend_jit_ugl_ce_lanes(cv[_c].ce); _i++) { \
+					(OUT).lane[_i] = ir_LOAD_F(ir_ADD_OFFSET(cv[_c].obj, zend_jit_ugl_lane_offset(cv[_c].ce, _i))); \
 				} \
 				break; \
 			case ZEND_JIT_UGL_SCALAR_CV: \
-				for (int c = 0; c < ncv; c++) { \
-					if (cv[c].var == (VAR)) { \
-						OUT = cv[c].scalar; \
-					} \
-				} \
+				UGL_FIND_CV(_var, _c); \
+				(OUT).ce = NULL; \
+				(OUT).lane[0] = cv[_c].scalar; \
 				break; \
-			case ZEND_JIT_UGL_CONST: \
-				OUT = ir_CONST_FLOAT(Z_TYPE_P(CONSTZV) == IS_DOUBLE ? (float) Z_DVAL_P(CONSTZV) : (float) Z_LVAL_P(CONSTZV)); \
-				break; \
+			case ZEND_JIT_UGL_CONST: { \
+				const zval *_zv = RT_CONSTANT(_op, (O) == 0 ? _op->op1 : _op->op2); \
+				(OUT).ce = NULL; \
+				(OUT).lane[0] = ir_CONST_FLOAT(Z_TYPE_P(_zv) == IS_DOUBLE ? (float) Z_DVAL_P(_zv) : (float) Z_LVAL_P(_zv)); \
+				break; } \
 			default: /* ZEND_JIT_UGL_TMP */ \
-				for (int t = 0; t < ntmp; t++) { \
-					if (tmp[t].var == (VAR)) { \
-						OUT = tmp[t].lane[LANE]; \
+				for (int _t = 0; _t < ntmp; _t++) { \
+					if (tmp[_t].var == _var) { \
+						OUT = tmp[_t].val; \
 					} \
 				} \
 				break; \
 		} \
 	} while (0)
 
-	/* Load every operand before anything is stored: the target may be an operand. */
 	for (int k = 0; k < n; k++) {
 		const zend_op *opline = steps[k].opline;
-		uint8_t op = opline->opcode == ZEND_ASSIGN_OP ? opline->extended_value : opline->opcode;
-		ir_ref lane[4];
+		zend_jit_ugl_val a, b, r;
 
 		if (opline->opcode == ZEND_ASSIGN) {
-			/* The value is the last temporary. */
 			for (int t = 0; t < ntmp; t++) {
 				if (tmp[t].var == opline->op2.var) {
-					for (int i = 0; i < dim; i++) {
-						final_lane[i] = tmp[t].lane[i];
-					}
+					final_val = tmp[t].val;
+					final_set = true;
 				}
 			}
 			continue;
 		}
-		for (int i = 0; i < dim; i++) {
-			ir_ref x = IR_UNUSED, y = IR_UNUSED, v;
-			const zval *zv1 = opline->op1_type == IS_CONST ? RT_CONSTANT(opline, opline->op1) : NULL;
-			const zval *zv2 = opline->op2_type == IS_CONST ? RT_CONSTANT(opline, opline->op2) : NULL;
+		if (opline->opcode == ZEND_FETCH_OBJ_R) {
+			zend_jit_ugl_val src;
 
-			if (opline->opcode == ZEND_ASSIGN_OP) {
-				/* $a op= $b: the left side is the target. */
-				for (int c = 0; c < ncv; c++) {
-					if (cv[c].var == target_var) {
-						x = ir_LOAD_F(ir_ADD_OFFSET(cv[c].obj, (uintptr_t) (ZEND_UGL_VEC_C_OFFSET + 4 * i)));
-					}
-				}
-			} else {
-				UGL_OPERAND(steps[k].kind[0], opline->op1.var, zv1, i, x);
+			UGL_OPERAND(src, &steps[k], 0);
+			r.ce = steps[k].nswz == 1 ? NULL : (steps[k].nswz == 2 ? zend_ce_ugl_vec2 : (steps[k].nswz == 3 ? zend_ce_ugl_vec3 : zend_ce_ugl_vec4));
+			for (int i = 0; i < steps[k].nswz; i++) {
+				r.lane[i] = src.lane[steps[k].swz[i]];
 			}
-			UGL_OPERAND(steps[k].kind[1], opline->op2.var, zv2, i, y);
-			switch (op) {
-				case ZEND_ADD: v = ir_ADD_F(x, y); break;
-				case ZEND_SUB: v = ir_SUB_F(x, y); break;
-				case ZEND_MUL: v = ir_MUL_F(x, y); break;
-				default:       v = ir_DIV_F(x, y); break;
-			}
-			lane[i] = v;
-			if (opline->opcode == ZEND_ASSIGN_OP && n == 1) {
-				/* Lane i depends on lane i only: store it right away. */
-				ir_STORE(ir_ADD_OFFSET(obj_t, (uintptr_t) (ZEND_UGL_VEC_C_OFFSET + 4 * i)), v);
-			}
+			tmp[ntmp].var = opline->result.var;
+			tmp[ntmp].val = r;
+			ntmp++;
+			continue;
 		}
 		if (opline->opcode == ZEND_ASSIGN_OP) {
-			for (int i = 0; i < dim; i++) {
-				final_lane[i] = lane[i];
+			int c;
+
+			/* $a op= $b: the left side is the target. */
+			UGL_FIND_CV(target_var, c);
+			a.ce = cv[c].ce;
+			if (n == 1 && target_ce != zend_ce_ugl_mat4
+			 && !(steps[k].kind[1] == ZEND_JIT_UGL_VEC_CV && steps[k].ce[1] == zend_ce_ugl_mat4)) {
+				/* A vector op= a vector or number: component i needs component i only, so
+				 * every component is stored right away. */
+				UGL_OPERAND(b, &steps[k], 1);
+				for (uint32_t i = 0; i < tlanes; i++) {
+					ir_ref x = ir_LOAD_F(ir_ADD_OFFSET(obj_t, zend_jit_ugl_lane_offset(target_ce, i)));
+
+					ir_STORE(ir_ADD_OFFSET(obj_t, zend_jit_ugl_lane_offset(target_ce, i)),
+						zend_jit_ugl_fop(jit, (uint8_t) opline->extended_value, x, b.ce ? b.lane[i] : b.lane[0]));
+				}
+				final_set = false;
+				continue;
 			}
-		} else {
-			tmp[ntmp].var = opline->result.var;
-			for (int i = 0; i < dim; i++) {
-				tmp[ntmp].lane[i] = lane[i];
+			for (uint32_t i = 0; i < zend_jit_ugl_ce_lanes(a.ce); i++) {
+				a.lane[i] = ir_LOAD_F(ir_ADD_OFFSET(cv[c].obj, zend_jit_ugl_lane_offset(a.ce, i)));
 			}
-			ntmp++;
+			UGL_OPERAND(b, &steps[k], 1);
+			zend_jit_ugl_binop(jit, (uint8_t) opline->extended_value, &a, &b, &r);
+			final_val = r;
+			final_set = true;
+			continue;
 		}
+		UGL_OPERAND(a, &steps[k], 0);
+		UGL_OPERAND(b, &steps[k], 1);
+		zend_jit_ugl_binop(jit, opline->opcode, &a, &b, &r);
+		/* Each temporary is used once: forget the ones this step consumed. */
+		for (int o = 0; o < 2; o++) {
+			if (steps[k].kind[o] == ZEND_JIT_UGL_TMP) {
+				uint32_t var = o == 0 ? opline->op1.var : opline->op2.var;
+
+				for (int t = 0; t < ntmp; t++) {
+					if (tmp[t].var == var) {
+						tmp[t] = tmp[ntmp - 1];
+						ntmp--;
+						break;
+					}
+				}
+			}
+		}
+		tmp[ntmp].var = opline->result.var;
+		tmp[ntmp].val = r;
+		ntmp++;
 	}
 #undef UGL_OPERAND
-	if (!(last->opcode == ZEND_ASSIGN_OP && n == 1)) {
-		for (int i = 0; i < dim; i++) {
-			ir_STORE(ir_ADD_OFFSET(obj_t, (uintptr_t) (ZEND_UGL_VEC_C_OFFSET + 4 * i)), final_lane[i]);
+#undef UGL_FIND_CV
+	if (final_set) {
+		for (uint32_t i = 0; i < tlanes; i++) {
+			ir_STORE(ir_ADD_OFFSET(obj_t, zend_jit_ugl_lane_offset(target_ce, i)), final_val.lane[i]);
 		}
 	}
 	/* What the handlers leave in IP: behind the last opcode of the run. */
