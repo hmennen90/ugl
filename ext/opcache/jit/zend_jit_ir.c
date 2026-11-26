@@ -17473,7 +17473,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 	struct {
 		uint8_t kind; uint32_t var; uint8_t type; zend_class_entry *ce;
 		uint8_t hkind; uint32_t hvar; zend_class_entry *hce; uint32_t off;
-		ir_ref obj; ir_ref scalar;
+		ir_ref obj; ir_ref scalar; ir_ref scalar_c;
 	} loc[3 * ZEND_JIT_UGL_MAX_CHAIN + 2];
 	struct { uint32_t var; zend_jit_ugl_val val; } tmp[ZEND_JIT_UGL_MAX_CHAIN];
 	int nloc = 0, ntmp = 0;
@@ -17522,10 +17522,12 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 
 	/* Every place once: its type, and for an object its class. */
 	for (int k = 0; k < n; k++) {
-		for (int o = 0; o < 2; o++) {
+		for (int o = 0; o < 3; o++) {
 			uint8_t kind = steps[k].kind[o];
-			const zend_op *src = (o == 1 && steps[k].data_op) ? steps[k].opline + 1 : steps[k].opline;
-			uint32_t var = o == 0 ? src->op1.var : (steps[k].data_op ? src->op1.var : src->op2.var);
+			/* o == 2 is the OP_DATA of a vec3() call; o == 1 is the OP_DATA of ASSIGN_OBJ_OP */
+			bool from_data = (o == 2) || (o == 1 && steps[k].data_op && !steps[k].ctor);
+			const zend_op *src = from_data ? steps[k].opline + 1 : steps[k].opline;
+			uint32_t var = from_data ? src->op1.var : (o == 0 ? src->op1.var : src->op2.var);
 
 			if (kind == ZEND_JIT_UGL_VEC_CV) {
 				UGL_ADD_VAR(var, IS_OBJECT, steps[k].ce[o]);
@@ -17577,9 +17579,13 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			loc[c].obj = jit_Z_PTR(jit, addr);
 			UGL_REQUIRE(ir_EQ(ir_LOAD_A(ir_ADD_OFFSET(loc[c].obj, offsetof(zend_object, ce))), ir_CONST_ADDR(loc[c].ce)));
 		} else if (loc[c].type == IS_DOUBLE) {
-			loc[c].scalar = ir_D2F(jit_Z_DVAL(jit, addr));
+			loc[c].scalar = loc[c].scalar_c = ir_D2F(jit_Z_DVAL(jit, addr));
 		} else {
-			loc[c].scalar = ir_INT2F(jit_Z_LVAL(jit, addr));
+			ir_ref lval = jit_Z_LVAL(jit, addr);
+
+			loc[c].scalar = ir_INT2F(lval);
+			/* an argument of vec2() / vec3() goes through a double first */
+			loc[c].scalar_c = ir_D2F(ir_INT2D(lval));
 		}
 	}
 	obj_t = loc[target_loc].obj;
@@ -17597,8 +17603,9 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 #define UGL_OPERAND(OUT, STEP, O) do { \
 		uint8_t _kind = (STEP)->kind[O]; \
 		const zend_op *_op = (STEP)->opline; \
-		const zend_op *_own = ((O) == 1 && (STEP)->data_op) ? _op + 1 : _op; \
-		znode_op _node = (O) == 0 ? _op->op1 : ((STEP)->data_op ? _own->op1 : _op->op2); \
+		bool _data = ((O) == 2) || ((O) == 1 && (STEP)->data_op && !(STEP)->ctor); \
+		const zend_op *_own = _data ? _op + 1 : _op; \
+		znode_op _node = _data ? _own->op1 : ((O) == 0 ? _op->op1 : _op->op2); \
 		int _c; \
 		switch (_kind) { \
 			case ZEND_JIT_UGL_VEC_CV: \
@@ -17611,12 +17618,13 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			case ZEND_JIT_UGL_SCALAR_CV: \
 				UGL_FIND_VAR(_node.var, _c); \
 				(OUT).ce = NULL; \
-				(OUT).lane[0] = loc[_c].scalar; \
+				(OUT).lane[0] = (STEP)->ctor ? loc[_c].scalar_c : loc[_c].scalar; \
 				break; \
 			case ZEND_JIT_UGL_CONST: { \
 				const zval *_zv = RT_CONSTANT(_own, _node); \
 				(OUT).ce = NULL; \
-				(OUT).lane[0] = ir_CONST_FLOAT(Z_TYPE_P(_zv) == IS_DOUBLE ? (float) Z_DVAL_P(_zv) : (float) Z_LVAL_P(_zv)); \
+				(OUT).lane[0] = ir_CONST_FLOAT(Z_TYPE_P(_zv) == IS_DOUBLE ? (float) Z_DVAL_P(_zv) \
+					: ((STEP)->ctor ? (float) (double) Z_LVAL_P(_zv) : (float) Z_LVAL_P(_zv))); \
 				break; } \
 			default: /* ZEND_JIT_UGL_TMP */ \
 				for (int _t = 0; _t < ntmp; _t++) { \
@@ -17648,6 +17656,33 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 					final_set = true;
 				}
 			}
+			continue;
+		}
+		if (steps[k].ctor) {
+			/* vec2(x, y) / vec3(x, y, z): the arguments are the components. */
+			for (int o = 0; o < steps[k].ctor; o++) {
+				zend_jit_ugl_val v;
+
+				UGL_OPERAND(v, &steps[k], o);
+				r.lane[o] = v.lane[0];
+			}
+			r.ce = steps[k].ctor == 2 ? zend_ce_ugl_vec2 : zend_ce_ugl_vec3;
+			for (int o = 0; o < steps[k].ctor; o++) {
+				if (steps[k].kind[o] == ZEND_JIT_UGL_TMP) {
+					uint32_t var = o == 2 ? (opline + 1)->op1.var : (o == 0 ? opline->op1.var : opline->op2.var);
+
+					for (int t = 0; t < ntmp; t++) {
+						if (tmp[t].var == var) {
+							tmp[t] = tmp[ntmp - 1];
+							ntmp--;
+							break;
+						}
+					}
+				}
+			}
+			tmp[ntmp].var = opline->result.var;
+			tmp[ntmp].val = r;
+			ntmp++;
 			continue;
 		}
 		if (opline->opcode == ZEND_FETCH_OBJ_R && steps[k].hkind) {

@@ -178,6 +178,31 @@ function matrices(): string {
     return md5($s . mbits($m) . mbits($n) . mbits($keep));
 }
 echo matrices(), "\n";
+
+// vec2() / vec3() calls: frameless, and inside runs their arguments are the components.
+function ctors(): string {
+    $f = 0.1; $n = 16777217; $big = 9007199254740993; $a = vec3(1, 2, 3); $c = vec3(0, 0, 0); $d = vec2(0, 0); $s = '';
+    for ($i = 0; $i < 80; $i++) {
+        $c = vec3($f, $n, $i);
+        $s .= bits($c);
+        $c = vec3($big, -$big, $a->x) * 0.5 + $a;
+        $s .= bits($c);
+        $d = vec2($a->y * 2, 7) + vec2(1.5, -0.0);
+        $s .= bits($d);
+        if ($i === 50) { $f = 3; $n = 0.5; }
+    }
+    return md5($s);
+}
+echo ctors(), "\n";
+function ctorerrors(): string {
+    $r = [];
+    for ($i = 0; $i < 60; $i++) {
+        try { $v = vec3($i < 50 ? 1.5 : "x", 2, 3); $r[] = 'ok'; } catch (TypeError $e) { $r[] = $e->getMessage(); }
+        try { $v = vec2(1, null); } catch (TypeError $e) { $r[] = $e->getMessage(); }
+    }
+    return implode('|', array_unique($r));
+}
+echo ctorerrors(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -200,3 +225,5 @@ float(3)
 vec3=50,TypeError=10
 8375eada230b13ec3f66092597502f2c
 cf94511f6bfdad085f96c25310eec4a8
+e6ff19b1df3b7c5ffd2989db3fb85f2a
+ok|vec2(): Argument #2 ($y) must be of type float, null given|vec3(): Argument #1 ($x) must be of type float, string given

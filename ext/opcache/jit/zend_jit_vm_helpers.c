@@ -891,6 +891,9 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data  *ex,
 			op2_type |= flags;
 		}
 		if (opline->opcode == ZEND_ASSIGN_DIM ||
+#ifdef ZEND_UGL
+			opline->opcode == ZEND_FRAMELESS_ICALL_3 ||
+#endif
 			opline->opcode == ZEND_ASSIGN_OBJ ||
 			opline->opcode == ZEND_ASSIGN_STATIC_PROP ||
 			opline->opcode == ZEND_ASSIGN_DIM_OP ||

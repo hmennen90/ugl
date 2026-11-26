@@ -16,6 +16,7 @@
 #include "zend_API.h"
 #include "zend_exceptions.h"
 #include "zend_ugl_vec.h"
+#include "zend_frameless_function.h"
 #include "zend_ugl_branding.h"
 
 #ifdef ZEND_UGL
@@ -543,6 +544,36 @@ ZEND_FUNCTION(vec2) { ugl_function_ctor(INTERNAL_FUNCTION_PARAM_PASSTHRU, 2); }
 ZEND_FUNCTION(vec3) { ugl_function_ctor(INTERNAL_FUNCTION_PARAM_PASSTHRU, 3); }
 ZEND_FUNCTION(vec4) { ugl_function_ctor(INTERNAL_FUNCTION_PARAM_PASSTHRU, 4); }
 
+/* vec2() and vec3() as frameless functions: the compiler emits ZEND_FRAMELESS_ICALL_2 / _3, the
+ * arguments reach the handler without a call frame. Plain floats and integers are turned into
+ * a vector right here; anything else runs the real function, which reports its errors. */
+static void ugl_flf_ctor(uint8_t dim, zval *return_value, zval *a1, zval *a2, zval *a3)
+{
+	zval *arg[3] = { a1, a2, a3 };
+	float c[4] = {0, 0, 0, 0};
+
+	for (uint8_t i = 0; i < dim; i++) {
+		if (EXPECTED(Z_TYPE_P(arg[i]) == IS_DOUBLE)) {
+			c[i] = (float) Z_DVAL_P(arg[i]);
+		} else if (EXPECTED(Z_TYPE_P(arg[i]) == IS_LONG)) {
+			c[i] = (float) (double) Z_LVAL_P(arg[i]);
+		} else {
+			zval params[3];
+			zend_function *fbc = zend_hash_str_find_ptr(EG(function_table), dim == 2 ? "vec2" : "vec3", 4);
+
+			for (uint8_t j = 0; j < dim; j++) {
+				ZVAL_COPY_VALUE(&params[j], arg[j]);
+			}
+			zend_call_known_function(fbc, NULL, NULL, return_value, dim, params, NULL);
+			return;
+		}
+	}
+	ugl_vec_new(return_value, dim, c);
+}
+
+ZEND_FRAMELESS_FUNCTION(vec2, 2) { ugl_flf_ctor(2, return_value, arg1, arg2, NULL); }
+ZEND_FRAMELESS_FUNCTION(vec3, 3) { ugl_flf_ctor(3, return_value, arg1, arg2, arg3); }
+
 static ZEND_NAMED_FUNCTION(ugl_vec_dot)
 {
 	zend_object *other;
@@ -1025,9 +1056,19 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_mat4_self, 0, 0, mat4, 0)
 ZEND_END_ARG_INFO()
 
+static const zend_frameless_function_info frameless_function_infos_vec2[] = {
+	{ ZEND_FRAMELESS_FUNCTION_NAME(vec2, 2), 2 },
+	{ 0 },
+};
+
+static const zend_frameless_function_info frameless_function_infos_vec3[] = {
+	{ ZEND_FRAMELESS_FUNCTION_NAME(vec3, 3), 3 },
+	{ 0 },
+};
+
 static const zend_function_entry ugl_functions[] = {
-	ZEND_FE(vec2, arginfo_fn_vec2)
-	ZEND_FE(vec3, arginfo_fn_vec3)
+	ZEND_RAW_FENTRY("vec2", zif_vec2, arginfo_fn_vec2, 0, frameless_function_infos_vec2, NULL)
+	ZEND_RAW_FENTRY("vec3", zif_vec3, arginfo_fn_vec3, 0, frameless_function_infos_vec3, NULL)
 	ZEND_FE(vec4, arginfo_fn_vec4)
 	ZEND_FE(mat4, arginfo_fn_mat4)
 	ZEND_FE_END

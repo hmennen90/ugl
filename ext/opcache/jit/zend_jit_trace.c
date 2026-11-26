@@ -583,6 +583,26 @@ static bool zend_jit_ugl_classify(const zend_op *owner, uint8_t type, znode_op n
 	return false;
 }
 
+/* Forget the temporaries an operation consumed (used[] holds their indexes, -1 for none). */
+static void zend_jit_ugl_drop_env(zend_jit_ugl_env *env, int *nenv, int *used, int count)
+{
+	for (int i = 0; i < count; i++) {
+		for (int j = i + 1; j < count; j++) {
+			if (used[j] > used[i]) {
+				int t = used[i]; used[i] = used[j]; used[j] = t;
+			}
+		}
+	}
+	for (int i = 0; i < count; i++) {
+		if (used[i] >= 0) {
+			for (int e = used[i]; e < *nenv - 1; e++) {
+				env[e] = env[e + 1];
+			}
+			(*nenv)--;
+		}
+	}
+}
+
 /* Looks ahead from a ZEND_ADD / SUB / MUL / DIV / ASSIGN_OP / ASSIGN_OBJ_OP / FETCH_OBJ_R record for a
  * run of vector arithmetic that ends in an assignment (see zend_jit_ugl_vec_chain). Operands are
  * vec2 / vec3 / vec4 / mat4 variables, vectors in typed properties, numbers, swizzles of a vector,
@@ -610,7 +630,7 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 			return false;
 		}
 		opline = rec->opline;
-		if (k > 0 && opline != steps[k - 1].opline + 1) {
+		if (k > 0 && opline != steps[k - 1].opline + (steps[k - 1].ctor == 3 ? 2 : 1)) {
 			return false;
 		}
 		next = rec + 1;
@@ -627,12 +647,13 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 		}
 		steps[k].opline = opline;
 		steps[k].rec = rec;
-		steps[k].kind[0] = steps[k].kind[1] = ZEND_JIT_UGL_NONE;
-		steps[k].stype[0] = steps[k].stype[1] = 0;
-		steps[k].ce[0] = steps[k].ce[1] = NULL;
+		steps[k].kind[0] = steps[k].kind[1] = steps[k].kind[2] = ZEND_JIT_UGL_NONE;
+		steps[k].stype[0] = steps[k].stype[1] = steps[k].stype[2] = 0;
+		steps[k].ce[0] = steps[k].ce[1] = steps[k].ce[2] = NULL;
 		steps[k].nswz = 0;
 		steps[k].data_op = false;
 		steps[k].hkind = 0;
+		steps[k].ctor = 0;
 
 		switch (opline->opcode) {
 			case ZEND_FETCH_OBJ_R: {
@@ -679,6 +700,38 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 				env[nenv].ce = steps[k].pce;
 				env[nenv].alias = true;
 				nenv++;
+				break;
+			}
+			case ZEND_FRAMELESS_ICALL_2:
+			case ZEND_FRAMELESS_ICALL_3: {
+				/* vec2(x, y), vec3(x, y, z): the components are the arguments. */
+				const zend_function *f = ZEND_FLF_FUNC(opline);
+				uint32_t dim = opline->opcode == ZEND_FRAMELESS_ICALL_2 ? 2 : 3;
+				uint8_t kinds[3], stypes[3];
+				int used[3] = { -1, -1, -1 };
+				zend_class_entry *vces[3];
+
+				if (opline->result_type != IS_TMP_VAR || nenv >= ZEND_JIT_UGL_MAX_CHAIN || !f || f->type != ZEND_INTERNAL_FUNCTION
+				 || !(dim == 2 ? zend_string_equals_literal(f->common.function_name, "vec2") : zend_string_equals_literal(f->common.function_name, "vec3"))
+				 || !zend_jit_ugl_classify(opline, opline->op1_type, opline->op1, rec->op1_type, ce1, env, nenv, &used[0], &kinds[0], &stypes[0], &vces[0])
+				 || !zend_jit_ugl_classify(opline, opline->op2_type, opline->op2, rec->op2_type, ce2, env, nenv, &used[1], &kinds[1], &stypes[1], &vces[1])
+				 || (dim == 3 && !zend_jit_ugl_classify(opline + 1, (opline + 1)->op1_type, (opline + 1)->op1, rec->op3_type, NULL, env, nenv, &used[2], &kinds[2], &stypes[2], &vces[2]))) {
+					return false;
+				}
+				for (uint32_t a = 0; a < dim; a++) {
+					if (vces[a] || kinds[a] == ZEND_JIT_UGL_VEC_CV) {
+						return false;
+					}
+					steps[k].kind[a] = kinds[a];
+					steps[k].stype[a] = stypes[a];
+				}
+				zend_jit_ugl_drop_env(env, &nenv, used, (int) dim);
+				env[nenv].var = opline->result.var;
+				env[nenv].ce = dim == 2 ? zend_ce_ugl_vec2 : zend_ce_ugl_vec3;
+				env[nenv].alias = false;
+				nenv++;
+				steps[k].ctor = (uint8_t) dim;
+				steps[k].data_op = dim == 3;
 				break;
 			}
 			case ZEND_ADD:
@@ -6961,11 +7014,45 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 						jit_frameless_icall1(jit, opline, op1_info);
 						goto done;
 					case ZEND_FRAMELESS_ICALL_2:
+#ifdef ZEND_UGL
+						{
+							zend_jit_ugl_step steps[ZEND_JIT_UGL_MAX_CHAIN];
+							int n;
+							zend_class_entry *vce;
+
+							/* vec2(x, y) / vec3(x, y, z) and what is done with it (see zend_jit_ugl_vec_chain) */
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+								gen_handler = 1;
+								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+									goto jit_failure;
+								}
+								ugl_skip = n - 1;
+								goto done;
+							}
+						}
+#endif
 						op1_info = OP1_INFO();
 						op2_info = OP2_INFO();
 						jit_frameless_icall2(jit, opline, op1_info, op2_info);
 						goto done;
 					case ZEND_FRAMELESS_ICALL_3:
+#ifdef ZEND_UGL
+						{
+							zend_jit_ugl_step steps[ZEND_JIT_UGL_MAX_CHAIN];
+							int n;
+							zend_class_entry *vce;
+
+							/* vec2(x, y) / vec3(x, y, z) and what is done with it (see zend_jit_ugl_vec_chain) */
+							if (zend_jit_ugl_scan_chain(op_array, vm_p, steps, &n, &vce)) {
+								gen_handler = 1;
+								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+									goto jit_failure;
+								}
+								ugl_skip = n - 1;
+								goto done;
+							}
+						}
+#endif
 						op1_info = OP1_INFO();
 						op2_info = OP2_INFO();
 						jit_frameless_icall3(jit, opline, op1_info, op2_info, OP1_DATA_INFO());
