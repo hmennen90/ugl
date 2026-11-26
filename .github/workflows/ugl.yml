@@ -40,10 +40,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends autoconf bison re2c pkg-config build-essential
+          sudo apt-get install -y --no-install-recommends autoconf bison re2c pkg-config build-essential libonig-dev
       - name: Dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install autoconf automake libtool bison re2c pkg-config
+        run: brew install autoconf automake libtool bison re2c pkg-config oniguruma
       - name: Build
         run: |
           [ "$RUNNER_OS" = macOS ] && export PATH="$(brew --prefix bison)/bin:$PATH"
@@ -61,10 +61,10 @@ jobs:
           tools: none
       - name: Tests (interpreter)
         run: |
-          TEST_PHP_EXECUTABLE="$PWD/sapi/cli/ugl" php run-tests.php -q --show-diff -P Zend/tests/ugl
+          TEST_PHP_EXECUTABLE="$PWD/sapi/cli/ugl" php run-tests.php -q --show-diff Zend/tests/ugl
       - name: Tests (tracing JIT)
         run: |
-          TEST_PHP_EXECUTABLE="$PWD/sapi/cli/ugl" php run-tests.php -q --show-diff -P Zend/tests/ugl \
+          TEST_PHP_EXECUTABLE="$PWD/sapi/cli/ugl" php run-tests.php -q --show-diff Zend/tests/ugl \
             -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M \
             -d opcache.jit_hot_loop=1 -d opcache.jit_hot_func=1 -d opcache.file_update_protection=0
       - name: Fuzz JIT against interpreter
@@ -92,7 +92,7 @@ jobs:
       PLATFORM: x64
       THREAD_SAFE: ${{ matrix.zts && '1' || '0' }}
       PARALLEL: -j2
-      ADD_CONF: --enable-ugl --disable-all --enable-cli --enable-opcache --enable-ctype --enable-tokenizer --enable-filter --enable-mbstring
+      ADD_CONF: --enable-ugl --disable-all --enable-cli --enable-ctype --enable-tokenizer --enable-filter --enable-mbstring
     steps:
       - name: git config
         run: git config --global core.autocrlf false && git config --global core.eol lf
