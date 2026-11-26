@@ -17392,7 +17392,8 @@ static int zend_jit_trace_handler(zend_jit_ctx *jit, const zend_op_array *op_arr
  * the result is the same either way. The arithmetic mirrors zend_ugl_vec.c operation by operation
  * (same order of additions, no fused multiply-add), so the bits are the same. */
 typedef struct {
-	zend_class_entry *ce;   /* NULL: a number, in lane[0] */
+	zend_class_entry *ce;   /* NULL: a number, in lane[0] as float32 */
+	ir_ref            dbl;  /* a number that is a PHP float: its double value, else IR_UNUSED */
 	ir_ref            lane[16];
 } zend_jit_ugl_val;
 
@@ -17421,6 +17422,18 @@ static void zend_jit_ugl_binop(zend_jit_ctx *jit, uint8_t op, const zend_jit_ugl
 {
 	zend_class_entry *mat = zend_ce_ugl_mat4;
 
+	r->dbl = IR_UNUSED;
+	if (!a->ce && !b->ce) {
+		/* two PHP floats: double precision, as the handler does */
+		r->ce = NULL;
+		switch (op) {
+			case ZEND_ADD: r->dbl = ir_ADD_D(a->dbl, b->dbl); break;
+			case ZEND_SUB: r->dbl = ir_SUB_D(a->dbl, b->dbl); break;
+			default:       r->dbl = ir_MUL_D(a->dbl, b->dbl); break;
+		}
+		r->lane[0] = ir_D2F(r->dbl);
+		return;
+	}
 	if (a->ce == mat && b->ce == mat && op == ZEND_MUL) {
 		/* out[j * 4 + i] = sum over k of a[k * 4 + i] * b[j * 4 + k], summed from 0 in order */
 		r->ce = mat;
@@ -17473,7 +17486,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 	struct {
 		uint8_t kind; uint32_t var; uint8_t type; zend_class_entry *ce;
 		uint8_t hkind; uint32_t hvar; zend_class_entry *hce; uint32_t off;
-		ir_ref obj; ir_ref scalar; ir_ref scalar_c;
+		ir_ref obj; ir_ref scalar; ir_ref scalar_c; ir_ref dval;
 	} loc[3 * ZEND_JIT_UGL_MAX_CHAIN + 2];
 	struct { uint32_t var; zend_jit_ugl_val val; } tmp[ZEND_JIT_UGL_MAX_CHAIN];
 	int nloc = 0, ntmp = 0;
@@ -17579,7 +17592,8 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			loc[c].obj = jit_Z_PTR(jit, addr);
 			UGL_REQUIRE(ir_EQ(ir_LOAD_A(ir_ADD_OFFSET(loc[c].obj, offsetof(zend_object, ce))), ir_CONST_ADDR(loc[c].ce)));
 		} else if (loc[c].type == IS_DOUBLE) {
-			loc[c].scalar = loc[c].scalar_c = ir_D2F(jit_Z_DVAL(jit, addr));
+			loc[c].dval = jit_Z_DVAL(jit, addr);
+			loc[c].scalar = loc[c].scalar_c = ir_D2F(loc[c].dval);
 		} else {
 			ir_ref lval = jit_Z_LVAL(jit, addr);
 
@@ -17611,6 +17625,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			case ZEND_JIT_UGL_VEC_CV: \
 				UGL_FIND_VAR(_node.var, _c); \
 				(OUT).ce = loc[_c].ce; \
+				(OUT).dbl = IR_UNUSED; \
 				for (uint32_t _i = 0; _i < zend_jit_ugl_ce_lanes(loc[_c].ce); _i++) { \
 					(OUT).lane[_i] = ir_LOAD_F(ir_ADD_OFFSET(loc[_c].obj, zend_jit_ugl_lane_offset(loc[_c].ce, _i))); \
 				} \
@@ -17618,11 +17633,13 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			case ZEND_JIT_UGL_SCALAR_CV: \
 				UGL_FIND_VAR(_node.var, _c); \
 				(OUT).ce = NULL; \
+				(OUT).dbl = loc[_c].type == IS_DOUBLE ? loc[_c].dval : IR_UNUSED; \
 				(OUT).lane[0] = (STEP)->ctor ? loc[_c].scalar_c : loc[_c].scalar; \
 				break; \
 			case ZEND_JIT_UGL_CONST: { \
 				const zval *_zv = RT_CONSTANT(_own, _node); \
 				(OUT).ce = NULL; \
+				(OUT).dbl = Z_TYPE_P(_zv) == IS_DOUBLE ? ir_CONST_DOUBLE(Z_DVAL_P(_zv)) : IR_UNUSED; \
 				(OUT).lane[0] = ir_CONST_FLOAT(Z_TYPE_P(_zv) == IS_DOUBLE ? (float) Z_DVAL_P(_zv) \
 					: ((STEP)->ctor ? (float) (double) Z_LVAL_P(_zv) : (float) Z_LVAL_P(_zv))); \
 				break; } \
@@ -17656,6 +17673,36 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 					final_set = true;
 				}
 			}
+			continue;
+		}
+		if (steps[k].dot) {
+			/* dot($a, $b): sum = 0; sum += a[i] * b[i] in order, like the method */
+			ir_ref sum = ir_CONST_FLOAT(0);
+
+			UGL_OPERAND(a, &steps[k], 0);
+			UGL_OPERAND(b, &steps[k], 1);
+			for (uint32_t i = 0; i < zend_jit_ugl_ce_lanes(a.ce); i++) {
+				sum = ir_ADD_F(sum, ir_MUL_F(a.lane[i], b.lane[i]));
+			}
+			r.ce = NULL;
+			r.lane[0] = sum;
+			r.dbl = ir_F2D(sum);
+			for (int o = 0; o < 2; o++) {
+				if (steps[k].kind[o] == ZEND_JIT_UGL_TMP) {
+					uint32_t var = o == 0 ? opline->op1.var : opline->op2.var;
+
+					for (int t = 0; t < ntmp; t++) {
+						if (tmp[t].var == var) {
+							tmp[t] = tmp[ntmp - 1];
+							ntmp--;
+							break;
+						}
+					}
+				}
+			}
+			tmp[ntmp].var = opline->result.var;
+			tmp[ntmp].val = r;
+			ntmp++;
 			continue;
 		}
 		if (steps[k].ctor) {
@@ -17706,6 +17753,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			for (int i = 0; i < steps[k].nswz; i++) {
 				r.lane[i] = src.lane[steps[k].swz[i]];
 			}
+			r.dbl = steps[k].nswz == 1 ? ir_F2D(r.lane[0]) : IR_UNUSED;
 			tmp[ntmp].var = opline->result.var;
 			tmp[ntmp].val = r;
 			ntmp++;

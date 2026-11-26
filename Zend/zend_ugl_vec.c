@@ -571,6 +571,53 @@ static void ugl_flf_ctor(uint8_t dim, zval *return_value, zval *a1, zval *a2, zv
 	ugl_vec_new(return_value, dim, c);
 }
 
+/* dot($a, $b) of two vectors of one class, the function form of $a->dot($b): frameless, and a
+ * float32 sum in the order of the method, so that both give the same bits. */
+static ZEND_NAMED_FUNCTION(ugl_fn_dot)
+{
+	zend_object *a, *b;
+
+	ZEND_PARSE_PARAMETERS_START(2, 2)
+		Z_PARAM_OBJ(a)
+		Z_PARAM_OBJ(b)
+	ZEND_PARSE_PARAMETERS_END();
+	if (a->handlers != &ugl_vec_handlers) {
+		zend_argument_type_error(1, "must be of type vec2|vec3|vec4, %s given", ZSTR_VAL(a->ce->name));
+		RETURN_THROWS();
+	}
+	if (b->ce != a->ce) {
+		zend_argument_type_error(2, "must be of type %s, %s given", ZSTR_VAL(a->ce->name), ZSTR_VAL(b->ce->name));
+		RETURN_THROWS();
+	}
+	zend_ugl_vec *va = ugl_vec_from_obj(a), *vb = ugl_vec_from_obj(b);
+	float sum = 0;
+	for (uint8_t i = 0; i < va->dim; i++) {
+		sum += va->c[i] * vb->c[i];
+	}
+	RETURN_DOUBLE(sum);
+}
+
+ZEND_FRAMELESS_FUNCTION(dot, 2)
+{
+	if (EXPECTED(Z_TYPE_P(arg1) == IS_OBJECT) && EXPECTED(Z_TYPE_P(arg2) == IS_OBJECT)
+	 && EXPECTED(Z_OBJ_P(arg1)->handlers == &ugl_vec_handlers) && EXPECTED(Z_OBJCE_P(arg1) == Z_OBJCE_P(arg2))) {
+		zend_ugl_vec *va = ugl_vec_from_obj(Z_OBJ_P(arg1)), *vb = ugl_vec_from_obj(Z_OBJ_P(arg2));
+		float sum = 0;
+
+		for (uint8_t i = 0; i < va->dim; i++) {
+			sum += va->c[i] * vb->c[i];
+		}
+		ZVAL_DOUBLE(return_value, sum);
+		return;
+	}
+	zval params[2];
+	zend_function *fbc = zend_hash_str_find_ptr(EG(function_table), "dot", 3);
+
+	ZVAL_COPY_VALUE(&params[0], arg1);
+	ZVAL_COPY_VALUE(&params[1], arg2);
+	zend_call_known_function(fbc, NULL, NULL, return_value, 2, params, NULL);
+}
+
 ZEND_FRAMELESS_FUNCTION(vec2, 2) { ugl_flf_ctor(2, return_value, arg1, arg2, NULL); }
 ZEND_FRAMELESS_FUNCTION(vec3, 3) { ugl_flf_ctor(3, return_value, arg1, arg2, arg3); }
 
@@ -1056,6 +1103,16 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_mat4_self, 0, 0, mat4, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_fn_dot, 0, 2, IS_DOUBLE, 0)
+	ZEND_ARG_TYPE_INFO(0, a, IS_OBJECT, 0)
+	ZEND_ARG_TYPE_INFO(0, b, IS_OBJECT, 0)
+ZEND_END_ARG_INFO()
+
+static const zend_frameless_function_info frameless_function_infos_dot[] = {
+	{ ZEND_FRAMELESS_FUNCTION_NAME(dot, 2), 2 },
+	{ 0 },
+};
+
 static const zend_frameless_function_info frameless_function_infos_vec2[] = {
 	{ ZEND_FRAMELESS_FUNCTION_NAME(vec2, 2), 2 },
 	{ 0 },
@@ -1068,6 +1125,7 @@ static const zend_frameless_function_info frameless_function_infos_vec3[] = {
 
 static const zend_function_entry ugl_functions[] = {
 	ZEND_RAW_FENTRY("vec2", zif_vec2, arginfo_fn_vec2, 0, frameless_function_infos_vec2, NULL)
+	ZEND_RAW_FENTRY("dot", ugl_fn_dot, arginfo_fn_dot, 0, frameless_function_infos_dot, NULL)
 	ZEND_RAW_FENTRY("vec3", zif_vec3, arginfo_fn_vec3, 0, frameless_function_infos_vec3, NULL)
 	ZEND_FE(vec4, arginfo_fn_vec4)
 	ZEND_FE(mat4, arginfo_fn_mat4)

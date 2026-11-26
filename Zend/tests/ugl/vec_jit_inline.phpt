@@ -203,6 +203,30 @@ function ctorerrors(): string {
     return implode('|', array_unique($r));
 }
 echo ctorerrors(), "\n";
+
+// dot($a, $b) (the function form of the method) inside runs, with plain floats around it.
+function dots(): string {
+    $a = vec3(1, 2, 3); $b = vec3(0.5, -0.25, 2); $n = vec3(0, 1, 0); $r = vec3(0, 0, 0); $f = 0.1; $s = '';
+    for ($i = 0; $i < 80; $i++) {
+        $r = $a - $n * (2.0 * dot($a, $n));          // reflect
+        $s .= bits($r);
+        $r = $b * ($f + dot($a, $b)) + $n * $f * 2.0;
+        $s .= bits($r);
+        $s .= bin2hex(pack('e', dot($a, $b) * 3.0));
+        if ($i === 40) { $f = 7.5; $a = vec3(-1, 1e20, 3); }
+    }
+    return md5($s);
+}
+echo dots(), "\n";
+function dotErrors(): string {
+    $r = [];
+    for ($i = 0; $i < 40; $i++) {
+        try { $r[] = dot(vec3(1, 2, 3), $i < 30 ? vec3(1, 1, 1) : vec2(1, 1)); } catch (TypeError $e) { $r[] = $e->getMessage(); }
+        try { dot(vec2(1, 2)); } catch (ArgumentCountError $e) { $r[] = $e->getMessage(); }
+    }
+    return implode('|', array_unique(array_map('strval', $r)));
+}
+echo dotErrors(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -227,3 +251,5 @@ vec3=50,TypeError=10
 cf94511f6bfdad085f96c25310eec4a8
 e6ff19b1df3b7c5ffd2989db3fb85f2a
 ok|vec2(): Argument #2 ($y) must be of type float, null given|vec3(): Argument #1 ($x) must be of type float, string given
+5b5f683d74b1690551affafcf5ec8ac6
+6|dot() expects exactly 2 arguments, 1 given|dot(): Argument #2 ($b) must be of type vec3, vec2 given

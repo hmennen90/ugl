@@ -470,7 +470,18 @@ static zend_class_entry *zend_jit_ugl_binop_ce(uint8_t op, zend_class_entry *a, 
 
 /* A temporary produced inside the run. alias: it is the very object a property holds, so it must
  * not be assigned on (that would have to keep the identity). */
-typedef struct { uint32_t var; zend_class_entry *ce; bool alias; } zend_jit_ugl_env;
+typedef struct { uint32_t var; zend_class_entry *ce; bool alias; bool dbl; } zend_jit_ugl_env;
+
+/* Is the operand a plain PHP float (not an integer)? Such numbers are combined in double precision. */
+static bool zend_jit_ugl_operand_dbl(const zend_op *owner, znode_op node, uint8_t kind, uint8_t stype, const zend_jit_ugl_env *env, int used)
+{
+	switch (kind) {
+		case ZEND_JIT_UGL_CONST: return Z_TYPE_P(RT_CONSTANT(owner, node)) == IS_DOUBLE;
+		case ZEND_JIT_UGL_SCALAR_CV: return stype == IS_DOUBLE;
+		case ZEND_JIT_UGL_TMP: return used >= 0 && env[used].dbl;
+		default: return false;
+	}
+}
 
 /* The vec / mat class a typed property is declared with (?vec3 included), or NULL. */
 static zend_class_entry *zend_jit_ugl_prop_ce(const zend_property_info *info)
@@ -654,6 +665,7 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 		steps[k].data_op = false;
 		steps[k].hkind = 0;
 		steps[k].ctor = 0;
+		steps[k].dot = false;
 
 		switch (opline->opcode) {
 			case ZEND_FETCH_OBJ_R: {
@@ -688,6 +700,7 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 					env[nenv].var = opline->result.var;
 					env[nenv].ce = len == 1 ? NULL : (len == 2 ? zend_ce_ugl_vec2 : (len == 3 ? zend_ce_ugl_vec3 : zend_ce_ugl_vec4));
 					env[nenv].alias = false;
+					env[nenv].dbl = (len == 1);
 					nenv++;
 					break;
 				}
@@ -699,10 +712,39 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 				env[nenv].var = opline->result.var;
 				env[nenv].ce = steps[k].pce;
 				env[nenv].alias = true;
+				env[nenv].dbl = false;
 				nenv++;
 				break;
 			}
 			case ZEND_FRAMELESS_ICALL_2:
+				if (opline->opcode == ZEND_FRAMELESS_ICALL_2 && ZEND_FLF_FUNC(opline) && ZEND_FLF_FUNC(opline)->type == ZEND_INTERNAL_FUNCTION
+				 && zend_string_equals_literal(ZEND_FLF_FUNC(opline)->common.function_name, "dot")) {
+					/* dot($a, $b) of two vectors of one class: a number */
+					uint8_t kinds[2], stypes[2];
+					int used[2] = { -1, -1 };
+					zend_class_entry *vces[2];
+
+					if (opline->result_type != IS_TMP_VAR || nenv >= ZEND_JIT_UGL_MAX_CHAIN
+					 || !zend_jit_ugl_classify(opline, opline->op1_type, opline->op1, rec->op1_type, ce1, env, nenv, &used[0], &kinds[0], &stypes[0], &vces[0])
+					 || !zend_jit_ugl_classify(opline, opline->op2_type, opline->op2, rec->op2_type, ce2, env, nenv, &used[1], &kinds[1], &stypes[1], &vces[1])
+					 || !vces[0] || vces[0] != vces[1] || vces[0] == zend_ce_ugl_mat4
+					 || (used[0] >= 0 && used[0] == used[1])) {
+						return false;
+					}
+					for (int a = 0; a < 2; a++) {
+						steps[k].kind[a] = kinds[a];
+						steps[k].ce[a] = kinds[a] == ZEND_JIT_UGL_VEC_CV ? vces[a] : NULL;
+					}
+					zend_jit_ugl_drop_env(env, &nenv, used, 2);
+					env[nenv].var = opline->result.var;
+					env[nenv].ce = NULL;
+					env[nenv].alias = false;
+					env[nenv].dbl = true;
+					nenv++;
+					steps[k].dot = true;
+					break;
+				}
+				ZEND_FALLTHROUGH;
 			case ZEND_FRAMELESS_ICALL_3: {
 				/* vec2(x, y), vec3(x, y, z): the components are the arguments. */
 				const zend_function *f = ZEND_FLF_FUNC(opline);
@@ -729,6 +771,7 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 				env[nenv].var = opline->result.var;
 				env[nenv].ce = dim == 2 ? zend_ce_ugl_vec2 : zend_ce_ugl_vec3;
 				env[nenv].alias = false;
+				env[nenv].dbl = false;
 				nenv++;
 				steps[k].ctor = (uint8_t) dim;
 				steps[k].data_op = dim == 3;
@@ -743,8 +786,27 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 				 || !zend_jit_ugl_classify(opline, opline->op2_type, opline->op2, rec->op2_type, ce2, env, nenv, &used2, &kind2, &st2, &v2)) {
 					return false;
 				}
-				rce = zend_jit_ugl_binop_ce(opline->opcode, v1, v2, &ok);
-				if (!ok || (used1 >= 0 && used2 >= 0 && used1 == used2)) {
+				if (!v1 && !v2) {
+					/* two plain floats (a dot product, a swizzle component, a float variable): PHP
+					 * computes them in double precision; division stays with the handler (it may throw) */
+					if (opline->opcode == ZEND_DIV
+					 || !zend_jit_ugl_operand_dbl(opline, opline->op1, kind1, st1, env, used1)
+					 || !zend_jit_ugl_operand_dbl(opline, opline->op2, kind2, st2, env, used2)) {
+						return false;
+					}
+					rce = NULL;
+					ok = true;
+				} else {
+					rce = zend_jit_ugl_binop_ce(opline->opcode, v1, v2, &ok);
+				}
+				if (used1 >= 0 && used1 == used2) {
+					/* x + x, what the optimizer makes of 2.0 * x: the same temporary twice, used once */
+					if (v1 || v2) {
+						return false;
+					}
+					used2 = -1;
+				}
+				if (!ok) {
 					return false;
 				}
 				{
@@ -765,6 +827,7 @@ static bool zend_jit_ugl_scan_chain(const zend_op_array *op_array, zend_jit_trac
 				env[nenv].var = opline->result.var;
 				env[nenv].ce = rce;
 				env[nenv].alias = false;
+				env[nenv].dbl = (rce == NULL);
 				nenv++;
 				steps[k].kind[0] = kind1; steps[k].kind[1] = kind2;
 				steps[k].stype[0] = st1; steps[k].stype[1] = st2;
@@ -4855,11 +4918,13 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 	ssa_op = (JIT_G(opt_level) >= ZEND_JIT_LEVEL_INLINE) ? ssa->ops : NULL;
 #ifdef ZEND_UGL
 	uint32_t ugl_skip = 0; /* opcodes still to go of a run compiled at its first opcode */
+	bool ugl_chain_op = false; /* the opcode is (part of) a compiled run: its result is never stored */
 #endif
 	for (;;p++) {
 		if (p->op == ZEND_JIT_TRACE_VM) {
 #ifdef ZEND_UGL
 			zend_jit_trace_rec *vm_p = p;
+			ugl_chain_op = false;
 #endif
 			uint8_t op1_type = p->op1_type;
 			uint8_t op2_type = p->op2_type;
@@ -4904,6 +4969,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 				/* Already compiled with the first opcode of its run. */
 				ugl_skip--;
 				gen_handler = 1;
+				ugl_chain_op = true;
 				goto done;
 			}
 #endif
@@ -5033,6 +5099,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
+								ugl_chain_op = true;
 								goto done;
 							}
 						}
@@ -5192,6 +5259,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
+								ugl_chain_op = true;
 								goto done;
 							}
 						}
@@ -5391,6 +5459,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
+								ugl_chain_op = true;
 								goto done;
 							}
 						}
@@ -6579,6 +6648,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
+								ugl_chain_op = true;
 								goto done;
 							}
 						}
@@ -7027,6 +7097,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
+								ugl_chain_op = true;
 								goto done;
 							}
 						}
@@ -7049,6 +7120,7 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 									goto jit_failure;
 								}
 								ugl_skip = n - 1;
+								ugl_chain_op = true;
 								goto done;
 							}
 						}
@@ -7149,6 +7221,13 @@ done:
 						/* copy */
 						type = STACK_TYPE(stack, EX_VAR_TO_NUM(opline->op1.var));
 					}
+#ifdef ZEND_UGL
+					if (ugl_chain_op && opline->result_type == IS_TMP_VAR) {
+						/* A compiled run never writes the temporaries it replaces: the slot keeps what it had,
+						 * so the next opcode that stores into it must not rely on its tag. */
+						type = IS_UNKNOWN;
+					}
+#endif
 					if (opline->opcode == ZEND_JMP_SET
 					  || opline->opcode == ZEND_COALESCE
 					  || opline->opcode == ZEND_JMP_NULL) {
