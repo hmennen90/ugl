@@ -3527,10 +3527,12 @@ jit_failure:
 void zend_jit_unprotect(void)
 {
 #ifdef ZEND_JIT_APPLE_ZTS
-	if (zend_write_protect) {
+	if (zend_jit_buf_is_private) {
 		pthread_jit_write_protect_np(0);
+		return;
 	}
-#elif defined(HAVE_MPROTECT)
+#endif
+#if defined(HAVE_MPROTECT)
 	if (!(JIT_G(debug) & (ZEND_JIT_DEBUG_GDB|ZEND_JIT_DEBUG_PERF_DUMP))) {
 		int opts = PROT_READ | PROT_WRITE;
 #ifdef ZTS
@@ -3566,10 +3568,12 @@ void zend_jit_unprotect(void)
 void zend_jit_protect(void)
 {
 #ifdef ZEND_JIT_APPLE_ZTS
-	if (zend_write_protect) {
+	if (zend_jit_buf_is_private) {
 		pthread_jit_write_protect_np(1);
+		return;
 	}
-#elif defined(HAVE_MPROTECT)
+#endif
+#if defined(HAVE_MPROTECT)
 	if (!(JIT_G(debug) & (ZEND_JIT_DEBUG_GDB|ZEND_JIT_DEBUG_PERF_DUMP))) {
 #ifdef HAVE_PTHREAD_JIT_WRITE_PROTECT_NP
 		if (zend_write_protect) {
@@ -3819,15 +3823,20 @@ void zend_jit_startup(void *buf, size_t size, bool reattached)
 	dasm_ptr = dasm_end = (void*)(((char*)dasm_buf) + size - sizeof(*dasm_ptr) * 2);
 
 #ifdef ZEND_JIT_APPLE_ZTS
-	if (zend_write_protect) {
+	if (zend_jit_buf_is_private) {
 		pthread_jit_write_protect_np(1);
 	}
-#elif defined(HAVE_MPROTECT)
+#endif
+#if defined(HAVE_MPROTECT)
 #ifdef HAVE_PTHREAD_JIT_WRITE_PROTECT_NP
 	if (zend_write_protect) {
 		pthread_jit_write_protect_np(1);
 	}
 #endif
+#ifdef ZEND_JIT_APPLE_ZTS
+	if (!zend_jit_buf_is_private)
+#endif
+	{
 	if (JIT_G(debug) & (ZEND_JIT_DEBUG_GDB|ZEND_JIT_DEBUG_PERF_DUMP)) {
 		if (mprotect(dasm_buf, dasm_size, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
 			fprintf(stderr, "mprotect() failed [%d] %s\n", errno, strerror(errno));
@@ -3836,6 +3845,7 @@ void zend_jit_startup(void *buf, size_t size, bool reattached)
 		if (mprotect(dasm_buf, dasm_size, PROT_READ | PROT_EXEC) != 0) {
 			fprintf(stderr, "mprotect() failed [%d] %s\n", errno, strerror(errno));
 		}
+	}
 	}
 #elif defined(_WIN32)
 	if (JIT_G(debug) & (ZEND_JIT_DEBUG_GDB|ZEND_JIT_DEBUG_PERF_DUMP)) {
