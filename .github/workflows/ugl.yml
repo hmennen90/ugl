@@ -54,12 +54,19 @@ jobs:
         run: |
           sapi/cli/ugl -v
           sapi/cli/ugl -r 'echo UGL_VERSION, " ", get_class(vec3(1,2,3)), " ", dot(vec3(1,2,3), vec3(4,5,6)), "\n";'
+      - name: Stock PHP as test runner
+        uses: shivammathur/setup-php@2.40.0
+        with:
+          php-version: '8.5'
+          tools: none
       - name: Tests (interpreter)
         run: |
-          make test TESTS="Zend/tests/ugl" TEST_PHP_ARGS="-q --show-diff"
+          TEST_PHP_EXECUTABLE="$PWD/sapi/cli/ugl" php run-tests.php -q --show-diff -P Zend/tests/ugl
       - name: Tests (tracing JIT)
         run: |
-          make test TESTS="Zend/tests/ugl" TEST_PHP_ARGS="-q --show-diff -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M -d opcache.jit_hot_loop=1 -d opcache.jit_hot_func=1 -d opcache.file_update_protection=0"
+          TEST_PHP_EXECUTABLE="$PWD/sapi/cli/ugl" php run-tests.php -q --show-diff -P Zend/tests/ugl \
+            -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M \
+            -d opcache.jit_hot_loop=1 -d opcache.jit_hot_func=1 -d opcache.file_update_protection=0
       - name: Fuzz JIT against interpreter
         run: benchmark/ugl/fuzz/run-fuzz.sh "$PWD/sapi/cli/ugl" 1 60
       - uses: actions/upload-artifact@v7
