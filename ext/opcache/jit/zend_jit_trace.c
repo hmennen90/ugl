@@ -420,6 +420,18 @@ static zend_always_inline void zend_jit_trace_add_op_guard(zend_ssa             
 #define ADD_OP1_DATA_TRACE_GUARD() \
 	ADD_OP_GUARD(tssa->ops[idx+1].op1_use, op3_type)
 
+#ifdef ZEND_UGL
+/* At least one operand is an object, the other one an object, a double or an integer. Whether the
+ * objects are vectors of one class is checked at run time by the generated code. */
+# define ZEND_JIT_UGL_SCALAR_OR_OBJECT(type) \
+	((type) == IS_OBJECT || (type) == IS_DOUBLE || (type) == IS_LONG)
+# define ZEND_JIT_UGL_OP_TYPE(opline, n, recorded) \
+	((opline)->op##n##_type == IS_CONST ? Z_TYPE_P(RT_CONSTANT((opline), (opline)->op##n)) : (recorded))
+# define ZEND_JIT_UGL_VEC_OPERANDS(opline, t1, t2) \
+	(((t1) == IS_OBJECT || (t2) == IS_OBJECT) \
+	 && ZEND_JIT_UGL_SCALAR_OR_OBJECT(t1) && ZEND_JIT_UGL_SCALAR_OR_OBJECT(t2))
+#endif
+
 #define CHECK_OP1_TRACE_TYPE() \
 	CHECK_OP_TRACE_TYPE(opline->op1.var, ssa_op->op1_use, op1_info, op1_type)
 #define CHECK_OP2_TRACE_TYPE() \
@@ -4538,7 +4550,29 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 					case ZEND_ADD:
 					case ZEND_SUB:
 					case ZEND_MUL:
-//					case ZEND_DIV: // TODO: check for division by zero ???
+					case ZEND_DIV:
+#ifdef ZEND_UGL
+						/* $r = $a <op> $b on vectors (see zend_jit_ugl_vec_binary) */
+						if (ZEND_JIT_UGL_VEC_OPERANDS(opline, ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type))
+						 && (opline->op1_type == IS_CV || opline->op1_type == IS_CONST)
+						 && (opline->op2_type == IS_CV || opline->op2_type == IS_CONST)
+						 && opline->result_type == IS_TMP_VAR
+						 && (opline + 1)->opcode == ZEND_ASSIGN
+						 && (opline + 1)->op1_type == IS_CV
+						 && (opline + 1)->op2_type == IS_TMP_VAR
+						 && (opline + 1)->op2.var == opline->result.var) {
+							gen_handler = 1;
+							if (!zend_jit_ugl_vec_binary(&ctx, op_array, opline,
+									ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type),
+									zend_may_throw(opline, ssa_op, op_array, ssa), p + 1)) {
+								goto jit_failure;
+							}
+							goto done;
+						}
+#endif
+						if (opline->opcode == ZEND_DIV) {
+							break;
+						}
 						op1_info = OP1_INFO();
 						op1_addr = OP1_REG_ADDR();
 						op2_info = OP2_INFO();
@@ -4679,6 +4713,22 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 						if (opline->op1_type != IS_CV || opline->result_type != IS_UNUSED) {
 							break;
 						}
+#ifdef ZEND_UGL
+						/* $a op= $b on vectors (see zend_jit_ugl_vec_binary) */
+						if (ZEND_JIT_UGL_VEC_OPERANDS(opline, ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type))
+						 && op1_type == IS_OBJECT
+						 && (opline->op2_type == IS_CV || opline->op2_type == IS_CONST)
+						 && (opline->extended_value == ZEND_ADD || opline->extended_value == ZEND_SUB
+						  || opline->extended_value == ZEND_MUL || opline->extended_value == ZEND_DIV)) {
+							gen_handler = 1;
+							if (!zend_jit_ugl_vec_binary(&ctx, op_array, opline,
+									ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type),
+									zend_may_throw(opline, ssa_op, op_array, ssa), p + 1)) {
+								goto jit_failure;
+							}
+							goto done;
+						}
+#endif
 						op1_info = OP1_INFO();
 						CHECK_OP1_TRACE_TYPE();
 						op2_info = OP2_INFO();

@@ -17374,6 +17374,115 @@ static int zend_jit_trace_handler(zend_jit_ctx *jit, const zend_op_array *op_arr
 	return 1;
 }
 
+#ifdef ZEND_UGL
+/* "$r = $a <op> $b" and "$a op= $b" where at least one operand is a vec2 / vec3 / vec4 variable
+ * and the other one is a vector of the same class or a float / int (variable or constant). The
+ * target must already hold a vector of that class that nothing else references; its components
+ * are computed in float32 and stored into it, no helper call. The result temporary then
+ * references that vector, exactly what zend_ugl_vec_binary_op() leaves behind. Every other case
+ * (other classes, shared target, references, ...) runs the generic handler. The scalar operand is
+ * converted like the helper does: (float) of the double or of the integer. */
+static int zend_jit_ugl_vec_binary(zend_jit_ctx *jit, const zend_op_array *op_array, const zend_op *opline,
+		uint8_t op1_type, uint8_t op2_type, int may_throw, zend_jit_trace_rec *trace)
+{
+	/* ZEND_ASSIGN_OP: $a op= $b updates $a itself and leaves no result. */
+	bool in_place = opline->opcode == ZEND_ASSIGN_OP;
+	uint8_t op = in_place ? opline->extended_value : opline->opcode;
+	const zend_op *assign = opline + 1;
+	zend_jit_addr addr[2] = { OP1_ADDR(), OP2_ADDR() };
+	uint8_t type[2] = { op1_type, op2_type };
+	uint8_t optype[2] = { opline->op1_type, opline->op2_type };
+	zend_jit_addr r_addr = in_place ? 0 : RES_ADDR();
+	zend_jit_addr t_addr = in_place ? addr[0] : ZEND_ADDR_MEM_ZVAL(ZREG_FP, assign->op1.var);
+	ir_ref slow_inputs = IR_UNUSED, fast_inputs = IR_UNUSED;
+	ir_ref obj[2] = {IR_UNUSED, IR_UNUSED}, scalar[2] = {IR_UNUSED, IR_UNUSED};
+	ir_ref obj_t, ce = IR_UNUSED, ce_t;
+
+	zend_jit_set_ip(jit, opline);
+
+#define UGL_REQUIRE(cond) do { \
+		ir_ref _if = ir_IF(cond); \
+		ir_IF_FALSE_cold(_if); \
+		ir_END_list(slow_inputs); \
+		ir_IF_TRUE(_if); \
+	} while (0)
+
+	for (int k = 0; k < 2; k++) {
+		if (type[k] == IS_OBJECT) {
+			UGL_REQUIRE(ir_EQ(jit_Z_TYPE(jit, addr[k]), ir_CONST_U8(IS_OBJECT)));
+			obj[k] = jit_Z_PTR(jit, addr[k]);
+			ir_ref c = ir_LOAD_A(ir_ADD_OFFSET(obj[k], offsetof(zend_object, ce)));
+			if (ce == IR_UNUSED) {
+				ce = c;
+			} else {
+				UGL_REQUIRE(ir_EQ(ce, c));
+			}
+		} else if (optype[k] == IS_CONST) {
+			zval *zv = RT_CONSTANT(opline, k == 0 ? opline->op1 : opline->op2);
+			scalar[k] = ir_CONST_FLOAT(Z_TYPE_P(zv) == IS_DOUBLE ? (float) Z_DVAL_P(zv) : (float) Z_LVAL_P(zv));
+		} else if (type[k] == IS_DOUBLE) {
+			UGL_REQUIRE(ir_EQ(jit_Z_TYPE(jit, addr[k]), ir_CONST_U8(IS_DOUBLE)));
+			scalar[k] = ir_D2F(jit_Z_DVAL(jit, addr[k]));
+		} else {
+			UGL_REQUIRE(ir_EQ(jit_Z_TYPE(jit, addr[k]), ir_CONST_U8(IS_LONG)));
+			scalar[k] = ir_INT2F(jit_Z_LVAL(jit, addr[k]));
+		}
+	}
+
+	UGL_REQUIRE(ir_EQ(jit_Z_TYPE(jit, t_addr), ir_CONST_U8(IS_OBJECT)));
+	obj_t = jit_Z_PTR(jit, t_addr);
+	ce_t = ir_LOAD_A(ir_ADD_OFFSET(obj_t, offsetof(zend_object, ce)));
+	UGL_REQUIRE(ir_EQ(ce, ce_t));
+	/* The target: one reference, not weakly referenced (ugl_can_overwrite). */
+	UGL_REQUIRE(ir_EQ(jit_GC_REFCOUNT(jit, obj_t), ir_CONST_U32(1)));
+	UGL_REQUIRE(ir_EQ(ir_AND_U32(
+		ir_LOAD_U32(ir_ADD_OFFSET(obj_t, offsetof(zend_refcounted_h, u.type_info))),
+		ir_CONST_U32(IS_OBJ_WEAKLY_REFERENCED << GC_FLAGS_SHIFT)), ir_CONST_U32(0)));
+
+	for (int dim = 4; dim >= 2; dim--) {
+		zend_class_entry *vec_ce = dim == 4 ? zend_ce_ugl_vec4 : (dim == 3 ? zend_ce_ugl_vec3 : zend_ce_ugl_vec2);
+		ir_ref if_dim = ir_IF(ir_EQ(ce, ir_CONST_ADDR(vec_ce)));
+
+		ir_IF_TRUE(if_dim);
+		for (int i = 0; i < dim; i++) {
+			uintptr_t off = (uintptr_t) (ZEND_UGL_VEC_C_OFFSET + 4 * i);
+			ir_ref x = obj[0] ? ir_LOAD_F(ir_ADD_OFFSET(obj[0], off)) : scalar[0];
+			ir_ref y = obj[1] ? ir_LOAD_F(ir_ADD_OFFSET(obj[1], off)) : scalar[1];
+			ir_ref v;
+
+			switch (op) {
+				case ZEND_ADD: v = ir_ADD_F(x, y); break;
+				case ZEND_SUB: v = ir_SUB_F(x, y); break;
+				case ZEND_MUL: v = ir_MUL_F(x, y); break;
+				default:       v = ir_DIV_F(x, y); break;
+			}
+			ir_STORE(ir_ADD_OFFSET(obj_t, off), v);
+		}
+		if (!in_place) {
+			jit_set_Z_PTR(jit, r_addr, obj_t);
+			jit_set_Z_TYPE_INFO(jit, r_addr, IS_OBJECT_EX);
+			jit_GC_ADDREF(jit, obj_t);
+		}
+		/* What the handler leaves in IP. */
+		jit_STORE_IP(jit, ir_ADD_OFFSET(jit_IP(jit), sizeof(zend_op)));
+		ir_END_list(fast_inputs);
+		ir_IF_FALSE_cold(if_dim);
+	}
+	ir_END_list(slow_inputs);
+#undef UGL_REQUIRE
+
+	ir_MERGE_list(slow_inputs);
+	if (!zend_jit_trace_handler(jit, op_array, opline, may_throw, trace)) {
+		return 0;
+	}
+	ir_END_list(fast_inputs);
+	ir_MERGE_list(fast_inputs);
+	zend_jit_set_last_valid_opline(jit, opline + 1);
+	return 1;
+}
+#endif
+
+
 static int zend_jit_deoptimizer_start(zend_jit_ctx        *jit,
                                       zend_string         *name,
                                       uint32_t             trace_num,
