@@ -17469,17 +17469,25 @@ static void zend_jit_ugl_binop(zend_jit_ctx *jit, uint8_t op, const zend_jit_ugl
 static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_array,
 		const zend_jit_ugl_step *steps, int n, zend_class_entry *target_ce)
 {
-	struct { uint32_t var; uint8_t type; zend_class_entry *ce; ir_ref obj; ir_ref scalar; } cv[2 * ZEND_JIT_UGL_MAX_CHAIN + 1];
+	/* The places the run reads or writes: variables (kind 0) and vector properties (kind 1). */
+	struct {
+		uint8_t kind; uint32_t var; uint8_t type; zend_class_entry *ce;
+		uint8_t hkind; uint32_t hvar; zend_class_entry *hce; uint32_t off;
+		ir_ref obj; ir_ref scalar;
+	} loc[3 * ZEND_JIT_UGL_MAX_CHAIN + 2];
 	struct { uint32_t var; zend_jit_ugl_val val; } tmp[ZEND_JIT_UGL_MAX_CHAIN];
-	int ncv = 0, ntmp = 0;
+	int nloc = 0, ntmp = 0;
 	const zend_op *last = steps[n - 1].opline;
 	const zend_op *head = steps[0].opline;
+	const zend_op *last_end = last + ((last->opcode == ZEND_ASSIGN_OBJ || last->opcode == ZEND_ASSIGN_OBJ_OP) ? 2 : 1);
+	bool target_is_prop = steps[n - 1].hkind != 0;
 	uint32_t target_var = last->op1.var;
 	uint32_t tlanes = zend_jit_ugl_ce_lanes(target_ce);
 	ir_ref slow_inputs = IR_UNUSED, fast_inputs = IR_UNUSED;
 	ir_ref obj_t = IR_UNUSED;
 	zend_jit_ugl_val final_val;
 	bool final_set = false;
+	int target_loc = -1;
 
 	zend_jit_set_ip(jit, head);
 
@@ -17490,98 +17498,129 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 		ir_IF_TRUE(_if); \
 	} while (0)
 
-	/* Every variable operand once: its type, and for an object its class. */
+	/* Register a variable or property once. */
+#define UGL_ADD_VAR(VAR, TYPE, CE) do { \
+		bool _seen = false; \
+		for (int _c = 0; _c < nloc; _c++) { \
+			if (loc[_c].kind == 0 && loc[_c].var == (VAR)) { _seen = true; break; } \
+		} \
+		if (!_seen) { \
+			loc[nloc].kind = 0; loc[nloc].var = (VAR); loc[nloc].type = (TYPE); loc[nloc].ce = (CE); nloc++; \
+		} \
+	} while (0)
+#define UGL_ADD_PROP(ST) do { \
+		bool _seen = false; \
+		if ((ST)->hkind == 2) { UGL_ADD_VAR((ST)->hvar, IS_OBJECT, (ST)->hce); } \
+		for (int _c = 0; _c < nloc; _c++) { \
+			if (loc[_c].kind == 1 && loc[_c].hkind == (ST)->hkind && loc[_c].hvar == (ST)->hvar && loc[_c].off == (ST)->poff) { _seen = true; break; } \
+		} \
+		if (!_seen) { \
+			loc[nloc].kind = 1; loc[nloc].type = IS_OBJECT; loc[nloc].ce = (ST)->pce; \
+			loc[nloc].hkind = (ST)->hkind; loc[nloc].hvar = (ST)->hvar; loc[nloc].hce = (ST)->hce; loc[nloc].off = (ST)->poff; nloc++; \
+		} \
+	} while (0)
+
+	/* Every place once: its type, and for an object its class. */
 	for (int k = 0; k < n; k++) {
 		for (int o = 0; o < 2; o++) {
 			uint8_t kind = steps[k].kind[o];
-			uint32_t var = o == 0 ? steps[k].opline->op1.var : steps[k].opline->op2.var;
-			bool seen = false;
+			const zend_op *src = (o == 1 && steps[k].data_op) ? steps[k].opline + 1 : steps[k].opline;
+			uint32_t var = o == 0 ? src->op1.var : (steps[k].data_op ? src->op1.var : src->op2.var);
 
-			if (kind != ZEND_JIT_UGL_VEC_CV && kind != ZEND_JIT_UGL_SCALAR_CV) {
-				continue;
+			if (kind == ZEND_JIT_UGL_VEC_CV) {
+				UGL_ADD_VAR(var, IS_OBJECT, steps[k].ce[o]);
+			} else if (kind == ZEND_JIT_UGL_SCALAR_CV) {
+				UGL_ADD_VAR(var, steps[k].stype[o], NULL);
 			}
-			for (int c = 0; c < ncv; c++) {
-				if (cv[c].var == var) {
-					seen = true;
-					break;
+		}
+		if (steps[k].hkind) {
+			UGL_ADD_PROP(&steps[k]);
+		}
+	}
+	/* The target, when it is not a place already. */
+	if (target_is_prop) {
+		UGL_ADD_PROP(&steps[n - 1]);
+		for (int c = 0; c < nloc; c++) {
+			if (loc[c].kind == 1 && loc[c].hkind == steps[n - 1].hkind && loc[c].hvar == steps[n - 1].hvar && loc[c].off == steps[n - 1].poff) {
+				target_loc = c;
+			}
+		}
+	} else {
+		UGL_ADD_VAR(target_var, IS_OBJECT, target_ce);
+		for (int c = 0; c < nloc; c++) {
+			if (loc[c].kind == 0 && loc[c].var == target_var) {
+				target_loc = c;
+			}
+		}
+	}
+	for (int c = 0; c < nloc; c++) {
+		zend_jit_addr addr;
+		ir_ref holder = IR_UNUSED;
+
+		if (loc[c].kind == 0) {
+			addr = ZEND_ADDR_MEM_ZVAL(ZREG_FP, loc[c].var);
+		} else {
+			/* The property's zval: $this is always an object, a variable has been checked above. */
+			if (loc[c].hkind == 1) {
+				holder = jit_Z_PTR(jit, ZEND_ADDR_MEM_ZVAL(ZREG_FP, offsetof(zend_execute_data, This)));
+			} else {
+				for (int h = 0; h < nloc; h++) {
+					if (loc[h].kind == 0 && loc[h].var == loc[c].hvar) {
+						holder = loc[h].obj;
+					}
 				}
 			}
-			if (!seen) {
-				cv[ncv].var = var;
-				cv[ncv].type = kind == ZEND_JIT_UGL_VEC_CV ? IS_OBJECT : steps[k].stype[o];
-				cv[ncv].ce = kind == ZEND_JIT_UGL_VEC_CV ? steps[k].ce[o] : NULL;
-				ncv++;
-			}
+			addr = ZEND_ADDR_REF_ZVAL(ir_ADD_OFFSET(holder, (uintptr_t) loc[c].off));
 		}
-	}
-	/* The target is a variable operand of its own when it is not one already. */
-	{
-		bool seen = false;
-
-		for (int c = 0; c < ncv; c++) {
-			if (cv[c].var == target_var) {
-				seen = true;
-			}
-		}
-		if (!seen) {
-			cv[ncv].var = target_var;
-			cv[ncv].type = IS_OBJECT;
-			cv[ncv].ce = target_ce;
-			ncv++;
-		}
-	}
-	for (int c = 0; c < ncv; c++) {
-		zend_jit_addr addr = ZEND_ADDR_MEM_ZVAL(ZREG_FP, cv[c].var);
-
-		UGL_REQUIRE(ir_EQ(jit_Z_TYPE(jit, addr), ir_CONST_U8(cv[c].type)));
-		if (cv[c].type == IS_OBJECT) {
-			cv[c].obj = jit_Z_PTR(jit, addr);
-			UGL_REQUIRE(ir_EQ(ir_LOAD_A(ir_ADD_OFFSET(cv[c].obj, offsetof(zend_object, ce))), ir_CONST_ADDR(cv[c].ce)));
-			if (cv[c].var == target_var) {
-				obj_t = cv[c].obj;
-			}
-		} else if (cv[c].type == IS_DOUBLE) {
-			cv[c].scalar = ir_D2F(jit_Z_DVAL(jit, addr));
+		UGL_REQUIRE(ir_EQ(jit_Z_TYPE(jit, addr), ir_CONST_U8(loc[c].type)));
+		if (loc[c].type == IS_OBJECT) {
+			loc[c].obj = jit_Z_PTR(jit, addr);
+			UGL_REQUIRE(ir_EQ(ir_LOAD_A(ir_ADD_OFFSET(loc[c].obj, offsetof(zend_object, ce))), ir_CONST_ADDR(loc[c].ce)));
+		} else if (loc[c].type == IS_DOUBLE) {
+			loc[c].scalar = ir_D2F(jit_Z_DVAL(jit, addr));
 		} else {
-			cv[c].scalar = ir_INT2F(jit_Z_LVAL(jit, addr));
+			loc[c].scalar = ir_INT2F(jit_Z_LVAL(jit, addr));
 		}
 	}
+	obj_t = loc[target_loc].obj;
 	/* The target: one reference, not weakly referenced (ugl_can_overwrite). */
 	UGL_REQUIRE(ir_EQ(jit_GC_REFCOUNT(jit, obj_t), ir_CONST_U32(1)));
 	UGL_REQUIRE(ir_EQ(ir_AND_U32(
 		ir_LOAD_U32(ir_ADD_OFFSET(obj_t, offsetof(zend_refcounted_h, u.type_info))),
 		ir_CONST_U32(IS_OBJ_WEAKLY_REFERENCED << GC_FLAGS_SHIFT)), ir_CONST_U32(0)));
 
-#define UGL_FIND_CV(VAR, IDX) do { IDX = -1; for (int _fc = 0; _fc < ncv; _fc++) { if (cv[_fc].var == (VAR)) { IDX = _fc; } } } while (0)
+#define UGL_FIND_VAR(VAR, IDX) do { IDX = -1; for (int _fc = 0; _fc < nloc; _fc++) { if (loc[_fc].kind == 0 && loc[_fc].var == (VAR)) { IDX = _fc; } } } while (0)
+#define UGL_FIND_PROP(ST, IDX) do { IDX = -1; for (int _fc = 0; _fc < nloc; _fc++) { if (loc[_fc].kind == 1 && loc[_fc].hkind == (ST)->hkind && loc[_fc].hvar == (ST)->hvar && loc[_fc].off == (ST)->poff) { IDX = _fc; } } } while (0)
 
 	/* The value of one operand. Everything is loaded before anything is stored: the target may
 	 * be an operand. */
 #define UGL_OPERAND(OUT, STEP, O) do { \
 		uint8_t _kind = (STEP)->kind[O]; \
 		const zend_op *_op = (STEP)->opline; \
-		uint32_t _var = (O) == 0 ? _op->op1.var : _op->op2.var; \
+		const zend_op *_own = ((O) == 1 && (STEP)->data_op) ? _op + 1 : _op; \
+		znode_op _node = (O) == 0 ? _op->op1 : ((STEP)->data_op ? _own->op1 : _op->op2); \
 		int _c; \
 		switch (_kind) { \
 			case ZEND_JIT_UGL_VEC_CV: \
-				UGL_FIND_CV(_var, _c); \
-				(OUT).ce = cv[_c].ce; \
-				for (uint32_t _i = 0; _i < zend_jit_ugl_ce_lanes(cv[_c].ce); _i++) { \
-					(OUT).lane[_i] = ir_LOAD_F(ir_ADD_OFFSET(cv[_c].obj, zend_jit_ugl_lane_offset(cv[_c].ce, _i))); \
+				UGL_FIND_VAR(_node.var, _c); \
+				(OUT).ce = loc[_c].ce; \
+				for (uint32_t _i = 0; _i < zend_jit_ugl_ce_lanes(loc[_c].ce); _i++) { \
+					(OUT).lane[_i] = ir_LOAD_F(ir_ADD_OFFSET(loc[_c].obj, zend_jit_ugl_lane_offset(loc[_c].ce, _i))); \
 				} \
 				break; \
 			case ZEND_JIT_UGL_SCALAR_CV: \
-				UGL_FIND_CV(_var, _c); \
+				UGL_FIND_VAR(_node.var, _c); \
 				(OUT).ce = NULL; \
-				(OUT).lane[0] = cv[_c].scalar; \
+				(OUT).lane[0] = loc[_c].scalar; \
 				break; \
 			case ZEND_JIT_UGL_CONST: { \
-				const zval *_zv = RT_CONSTANT(_op, (O) == 0 ? _op->op1 : _op->op2); \
+				const zval *_zv = RT_CONSTANT(_own, _node); \
 				(OUT).ce = NULL; \
 				(OUT).lane[0] = ir_CONST_FLOAT(Z_TYPE_P(_zv) == IS_DOUBLE ? (float) Z_DVAL_P(_zv) : (float) Z_LVAL_P(_zv)); \
 				break; } \
 			default: /* ZEND_JIT_UGL_TMP */ \
 				for (int _t = 0; _t < ntmp; _t++) { \
-					if (tmp[_t].var == _var) { \
+					if (tmp[_t].var == _node.var) { \
 						OUT = tmp[_t].val; \
 					} \
 				} \
@@ -17602,6 +17641,28 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			}
 			continue;
 		}
+		if (opline->opcode == ZEND_ASSIGN_OBJ) {
+			for (int t = 0; t < ntmp; t++) {
+				if (tmp[t].var == (opline + 1)->op1.var) {
+					final_val = tmp[t].val;
+					final_set = true;
+				}
+			}
+			continue;
+		}
+		if (opline->opcode == ZEND_FETCH_OBJ_R && steps[k].hkind) {
+			int c;
+
+			UGL_FIND_PROP(&steps[k], c);
+			r.ce = loc[c].ce;
+			for (uint32_t i = 0; i < zend_jit_ugl_ce_lanes(r.ce); i++) {
+				r.lane[i] = ir_LOAD_F(ir_ADD_OFFSET(loc[c].obj, zend_jit_ugl_lane_offset(r.ce, i)));
+			}
+			tmp[ntmp].var = opline->result.var;
+			tmp[ntmp].val = r;
+			ntmp++;
+			continue;
+		}
 		if (opline->opcode == ZEND_FETCH_OBJ_R) {
 			zend_jit_ugl_val src;
 
@@ -17615,13 +17676,12 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 			ntmp++;
 			continue;
 		}
-		if (opline->opcode == ZEND_ASSIGN_OP) {
-			int c;
+		if (opline->opcode == ZEND_ASSIGN_OP || opline->opcode == ZEND_ASSIGN_OBJ_OP) {
+			uint8_t op = (uint8_t) opline->extended_value;
 
 			/* $a op= $b: the left side is the target. */
-			UGL_FIND_CV(target_var, c);
-			a.ce = cv[c].ce;
-			if (n == 1 && target_ce != zend_ce_ugl_mat4
+			a.ce = loc[target_loc].ce;
+			if (n == 1 && opline->opcode == ZEND_ASSIGN_OP && target_ce != zend_ce_ugl_mat4
 			 && !(steps[k].kind[1] == ZEND_JIT_UGL_VEC_CV && steps[k].ce[1] == zend_ce_ugl_mat4)) {
 				/* A vector op= a vector or number: component i needs component i only, so
 				 * every component is stored right away. */
@@ -17630,16 +17690,16 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 					ir_ref x = ir_LOAD_F(ir_ADD_OFFSET(obj_t, zend_jit_ugl_lane_offset(target_ce, i)));
 
 					ir_STORE(ir_ADD_OFFSET(obj_t, zend_jit_ugl_lane_offset(target_ce, i)),
-						zend_jit_ugl_fop(jit, (uint8_t) opline->extended_value, x, b.ce ? b.lane[i] : b.lane[0]));
+						zend_jit_ugl_fop(jit, op, x, b.ce ? b.lane[i] : b.lane[0]));
 				}
 				final_set = false;
 				continue;
 			}
 			for (uint32_t i = 0; i < zend_jit_ugl_ce_lanes(a.ce); i++) {
-				a.lane[i] = ir_LOAD_F(ir_ADD_OFFSET(cv[c].obj, zend_jit_ugl_lane_offset(a.ce, i)));
+				a.lane[i] = ir_LOAD_F(ir_ADD_OFFSET(obj_t, zend_jit_ugl_lane_offset(a.ce, i)));
 			}
 			UGL_OPERAND(b, &steps[k], 1);
-			zend_jit_ugl_binop(jit, (uint8_t) opline->extended_value, &a, &b, &r);
+			zend_jit_ugl_binop(jit, op, &a, &b, &r);
 			final_val = r;
 			final_set = true;
 			continue;
@@ -17666,14 +17726,17 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 		ntmp++;
 	}
 #undef UGL_OPERAND
-#undef UGL_FIND_CV
+#undef UGL_FIND_VAR
+#undef UGL_FIND_PROP
+#undef UGL_ADD_VAR
+#undef UGL_ADD_PROP
 	if (final_set) {
 		for (uint32_t i = 0; i < tlanes; i++) {
 			ir_STORE(ir_ADD_OFFSET(obj_t, zend_jit_ugl_lane_offset(target_ce, i)), final_val.lane[i]);
 		}
 	}
 	/* What the handlers leave in IP: behind the last opcode of the run. */
-	jit_STORE_IP(jit, ir_ADD_OFFSET(jit_IP(jit), (uintptr_t) ((last + 1 - head) * sizeof(zend_op))));
+	jit_STORE_IP(jit, ir_ADD_OFFSET(jit_IP(jit), (uintptr_t) ((last_end - head) * sizeof(zend_op))));
 	ir_END_list(fast_inputs);
 #undef UGL_REQUIRE
 
@@ -17686,7 +17749,7 @@ static int zend_jit_ugl_vec_chain(zend_jit_ctx *jit, const zend_op_array *op_arr
 	}
 	ir_END_list(fast_inputs);
 	ir_MERGE_list(fast_inputs);
-	zend_jit_set_last_valid_opline(jit, last + 1);
+	zend_jit_set_last_valid_opline(jit, last_end);
 	return 1;
 }
 #endif

@@ -799,14 +799,24 @@ static zend_always_inline bool is_signed(double d)
 # define ZEND_JIT_UGL_SCALAR_CV  2
 # define ZEND_JIT_UGL_CONST      3
 # define ZEND_JIT_UGL_TMP        4
+# define ZEND_JIT_UGL_PROP       5  /* a vector in a typed property: $this->vel, $obj->pos */
 typedef struct _zend_jit_ugl_step {
 	const zend_op   *opline;
 	zend_jit_trace_rec *rec;      /* its ZEND_JIT_TRACE_VM record */
-	uint8_t          kind[2];     /* ZEND_JIT_UGL_* of op1 and op2 */
+	uint8_t          kind[2];     /* ZEND_JIT_UGL_* of op1 and op2 (of the OP_DATA with data_op) */
 	uint8_t          stype[2];    /* recorded zval type of a scalar variable */
 	zend_class_entry *ce[2];      /* class of a vec / mat variable operand (kind VEC_CV) */
 	uint8_t          swz[4];      /* ZEND_FETCH_OBJ_R of a swizzle: component indexes */
 	uint8_t          nswz;
+	bool             data_op;     /* operand 1 is the OP_DATA that follows (ASSIGN_OBJ_OP) */
+	/* A property access (ZEND_FETCH_OBJ_R, ZEND_ASSIGN_OBJ, ZEND_ASSIGN_OBJ_OP): the object it
+	 * reads is $this (hkind 1) or the variable hvar (hkind 2, class hce); the property holds a
+	 * vector or matrix of class pce at byte offset poff. */
+	uint8_t          hkind;
+	uint32_t         hvar;
+	zend_class_entry *hce;
+	uint32_t         poff;
+	zend_class_entry *pce;
 } zend_jit_ugl_step;
 #endif
 
