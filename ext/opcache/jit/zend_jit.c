@@ -3528,7 +3528,9 @@ void zend_jit_unprotect(void)
 {
 #ifdef ZEND_JIT_APPLE_ZTS
 	if (zend_jit_buf_is_private) {
-		pthread_jit_write_protect_np(0);
+		if (zend_write_protect) {
+			pthread_jit_write_protect_np(0);
+		}
 		return;
 	}
 #endif
@@ -3569,7 +3571,9 @@ void zend_jit_protect(void)
 {
 #ifdef ZEND_JIT_APPLE_ZTS
 	if (zend_jit_buf_is_private) {
-		pthread_jit_write_protect_np(1);
+		if (zend_write_protect) {
+			pthread_jit_write_protect_np(1);
+		}
 		return;
 	}
 #endif
@@ -3806,7 +3810,8 @@ void zend_jit_startup(void *buf, size_t size, bool reattached)
 #endif
 
 #ifdef ZEND_JIT_APPLE_ZTS
-	if (zend_write_protect) {
+	{
+		/* Also without per-thread write protection (VMs): MAP_JIT memory is then plainly RWX. */
 		void *jit_buf = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
 			MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, -1, 0);
 		if (jit_buf == MAP_FAILED) {
@@ -3824,7 +3829,9 @@ void zend_jit_startup(void *buf, size_t size, bool reattached)
 
 #ifdef ZEND_JIT_APPLE_ZTS
 	if (zend_jit_buf_is_private) {
-		pthread_jit_write_protect_np(1);
+		if (zend_write_protect) {
+			pthread_jit_write_protect_np(1);
+		}
 	}
 #endif
 #if defined(HAVE_MPROTECT)
