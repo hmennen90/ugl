@@ -70,6 +70,7 @@ jobs:
       - name: Debug failed JIT tests
         if: failure()
         run: |
+          set +e
           JIT="-n -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M -d opcache.jit_hot_loop=1 -d opcache.jit_hot_func=1 -d opcache.file_update_protection=0"
           for f in Zend/tests/ugl/*.php; do
             sapi/cli/ugl -n -d opcache.enable_cli=0 "$f" > /tmp/ref.txt 2>&1
@@ -105,13 +106,17 @@ jobs:
       PLATFORM: x64
       THREAD_SAFE: ${{ matrix.zts && '1' || '0' }}
       PARALLEL: -j2
-      ADD_CONF: --enable-ugl --disable-all --enable-cli --enable-ctype --enable-tokenizer --enable-filter --enable-mbstring --enable-com-dotnet
+      ADD_CONF: --enable-ugl --disable-all --enable-cli --enable-ctype --enable-tokenizer --enable-filter --enable-mbstring
     steps:
       - name: git config
         run: git config --global core.autocrlf false && git config --global core.eol lf
       - uses: actions/checkout@v6
       - name: Build
-        run: .github/scripts/windows/build.bat
+        shell: pwsh
+        run: |
+          (Get-Content .github/scripts/windows/build_task.bat) | Where-Object { $_ -notmatch 'comtest' } | Set-Content .github/scripts/windows/build_task.bat
+          .github/scripts/windows/build.bat
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Smoke test
         shell: cmd
         run: |

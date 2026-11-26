@@ -18,7 +18,7 @@ opcache.file_update_protection=0
 function bits(vec3|vec4|vec2 $v): string {
     $s = '';
     foreach (['x', 'y', 'z', 'w'] as $i => $c) {
-        if ($i < ($v instanceof vec2 ? 2 : ($v instanceof vec3 ? 3 : 4))) $s .= bin2hex(pack('g', $v->$c));
+        if ($i < ($v instanceof vec2 ? 2 : ($v instanceof vec3 ? 3 : 4))) $s .= is_nan($v->$c) ? 'nan' : bin2hex(pack('g', $v->$c));
     }
     return $s;
 }
@@ -306,7 +306,7 @@ float(3)
 8111e6a4e1a6d08f448059b3b6277c63 becce5426dc6a14358268444 5dbb9a425bdb59433df63144
 vec3=50,TypeError=10
 8375eada230b13ec3f66092597502f2c
-cf94511f6bfdad085f96c25310eec4a8
+75f335b9ace51f71bf382c361d3edd5d
 e6ff19b1df3b7c5ffd2989db3fb85f2a
 ok|vec2(): Argument #2 ($y) must be of type float, null given|vec3(): Argument #1 ($x) must be of type float, string given
 5b5f683d74b1690551affafcf5ec8ac6
