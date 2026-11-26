@@ -421,16 +421,183 @@ static zend_always_inline void zend_jit_trace_add_op_guard(zend_ssa             
 	ADD_OP_GUARD(tssa->ops[idx+1].op1_use, op3_type)
 
 #ifdef ZEND_UGL
-/* At least one operand is an object, the other one an object, a double or an integer. Whether the
- * objects are vectors of one class is checked at run time by the generated code. */
-# define ZEND_JIT_UGL_SCALAR_OR_OBJECT(type) \
-	((type) == IS_OBJECT || (type) == IS_DOUBLE || (type) == IS_LONG)
-# define ZEND_JIT_UGL_OP_TYPE(opline, n, recorded) \
-	((opline)->op##n##_type == IS_CONST ? Z_TYPE_P(RT_CONSTANT((opline), (opline)->op##n)) : (recorded))
-# define ZEND_JIT_UGL_VEC_OPERANDS(opline, t1, t2) \
-	(((t1) == IS_OBJECT || (t2) == IS_OBJECT) \
-	 && ZEND_JIT_UGL_SCALAR_OR_OBJECT(t1) && ZEND_JIT_UGL_SCALAR_OR_OBJECT(t2))
+static zend_class_entry *zend_jit_ugl_vec_ce(zend_class_entry *ce)
+{
+	return (ce == zend_ce_ugl_vec2 || ce == zend_ce_ugl_vec3 || ce == zend_ce_ugl_vec4) ? ce : NULL;
+}
+
+/* One operand of a vector operation: a vector variable, a number (variable or constant) or a
+ * temporary an earlier step of the run produced. Returns false if it is none of them. */
+static bool zend_jit_ugl_classify(const zend_op *opline, int o, uint8_t recorded, zend_class_entry *rce,
+		const uint32_t *env_var, zend_class_entry **env_ce, int nenv, int *used_env,
+		uint8_t *kind, uint8_t *stype, zend_class_entry **vce)
+{
+	uint8_t type = o == 0 ? opline->op1_type : opline->op2_type;
+	znode_op node = o == 0 ? opline->op1 : opline->op2;
+
+	*vce = NULL;
+	*stype = 0;
+	if (type == IS_CONST) {
+		zval *zv = RT_CONSTANT(opline, node);
+
+		if (Z_TYPE_P(zv) != IS_DOUBLE && Z_TYPE_P(zv) != IS_LONG) {
+			return false;
+		}
+		*kind = ZEND_JIT_UGL_CONST;
+		return true;
+	}
+	if (type == IS_TMP_VAR) {
+		for (int e = 0; e < nenv; e++) {
+			if (env_var[e] == node.var) {
+				*kind = ZEND_JIT_UGL_TMP;
+				*vce = env_ce[e];
+				*used_env = e;
+				return true;
+			}
+		}
+		return false;
+	}
+	if (type != IS_CV || (recorded & (IS_TRACE_REFERENCE|IS_TRACE_INDIRECT))) {
+		return false;
+	}
+	if (recorded == IS_OBJECT) {
+		*vce = zend_jit_ugl_vec_ce(rce);
+		if (!*vce) {
+			return false;
+		}
+		*kind = ZEND_JIT_UGL_VEC_CV;
+		return true;
+	}
+	if (recorded == IS_DOUBLE || recorded == IS_LONG) {
+		*kind = ZEND_JIT_UGL_SCALAR_CV;
+		*stype = recorded;
+		return true;
+	}
+	return false;
+}
+
+/* Looks ahead from a ZEND_ADD / SUB / MUL / DIV / ASSIGN_OP record for a run of vector arithmetic
+ * that ends in an assignment (see zend_jit_ugl_vec_chain). Every vector in the run has to be of
+ * one class, and every temporary has to be used inside the run. */
+static bool zend_jit_ugl_scan_chain(zend_jit_trace_rec *vm, zend_jit_ugl_step *steps, int *n_out, zend_class_entry **ce_out)
+{
+	uint32_t env_var[ZEND_JIT_UGL_MAX_CHAIN];
+	zend_class_entry *env_ce[ZEND_JIT_UGL_MAX_CHAIN];
+	int nenv = 0;
+	zend_class_entry *ce = NULL;
+	zend_jit_trace_rec *rec = vm;
+
+	for (int k = 0; k < ZEND_JIT_UGL_MAX_CHAIN; k++) {
+		const zend_op *opline;
+		zend_jit_trace_rec *next;
+		zend_class_entry *ce1 = NULL, *ce2 = NULL, *v1, *v2;
+		uint8_t kind1 = 0, kind2 = 0, st1 = 0, st2 = 0;
+		int used1 = -1, used2 = -1;
+
+		if (rec->op != ZEND_JIT_TRACE_VM) {
+			return false;
+		}
+		opline = rec->opline;
+		if (k > 0 && opline != steps[k - 1].opline + 1) {
+			return false;
+		}
+		next = rec + 1;
+		if (next->op == ZEND_JIT_TRACE_OP1_TYPE) {
+			ce1 = (zend_class_entry *) next->ce;
+			next++;
+		}
+		if (next->op == ZEND_JIT_TRACE_OP2_TYPE) {
+			ce2 = (zend_class_entry *) next->ce;
+			next++;
+		}
+		if (next->op == ZEND_JIT_TRACE_VAL_INFO) {
+			next++;
+		}
+		steps[k].opline = opline;
+		steps[k].rec = rec;
+		steps[k].kind[0] = steps[k].kind[1] = ZEND_JIT_UGL_NONE;
+		steps[k].stype[0] = steps[k].stype[1] = 0;
+
+		switch (opline->opcode) {
+			case ZEND_ADD:
+			case ZEND_SUB:
+			case ZEND_MUL:
+			case ZEND_DIV:
+				if (opline->result_type != IS_TMP_VAR || nenv >= ZEND_JIT_UGL_MAX_CHAIN
+				 || !zend_jit_ugl_classify(opline, 0, rec->op1_type, ce1, env_var, env_ce, nenv, &used1, &kind1, &st1, &v1)
+				 || !zend_jit_ugl_classify(opline, 1, rec->op2_type, ce2, env_var, env_ce, nenv, &used2, &kind2, &st2, &v2)) {
+					return false;
+				}
+				if ((!v1 && !v2) || (v1 && v2 && v1 != v2) || (ce && ((v1 && v1 != ce) || (v2 && v2 != ce)))) {
+					return false;
+				}
+				ce = v1 ? v1 : v2;
+				/* Each temporary is used once: drop the ones this step consumed. */
+				if (used1 >= 0 && used2 >= 0 && used1 == used2) {
+					return false;
+				}
+				{
+					int drop[2] = { used1, used2 };
+
+					if (drop[0] > drop[1]) {
+						int t = drop[0]; drop[0] = drop[1]; drop[1] = t;
+					}
+					for (int d = 1; d >= 0; d--) {
+						if (drop[d] >= 0) {
+							for (int e = drop[d]; e < nenv - 1; e++) {
+								env_var[e] = env_var[e + 1];
+								env_ce[e] = env_ce[e + 1];
+							}
+							nenv--;
+						}
+					}
+				}
+				env_var[nenv] = opline->result.var;
+				env_ce[nenv] = ce;
+				nenv++;
+				steps[k].kind[0] = kind1; steps[k].kind[1] = kind2;
+				steps[k].stype[0] = st1; steps[k].stype[1] = st2;
+				break;
+			case ZEND_ASSIGN:
+				if (opline->op1_type != IS_CV || opline->op2_type != IS_TMP_VAR
+				 || opline->result_type != IS_UNUSED || !ce
+				 || rec->op1_type != IS_OBJECT || ce1 != ce
+				 || nenv != 1 || env_var[0] != opline->op2.var) {
+					return false;
+				}
+				*n_out = k + 1;
+				*ce_out = ce;
+				return true;
+			case ZEND_ASSIGN_OP:
+				if (opline->op1_type != IS_CV || opline->result_type != IS_UNUSED
+				 || (opline->extended_value != ZEND_ADD && opline->extended_value != ZEND_SUB
+				  && opline->extended_value != ZEND_MUL && opline->extended_value != ZEND_DIV)
+				 || rec->op1_type != IS_OBJECT || !zend_jit_ugl_vec_ce(ce1)
+				 || (ce && ce != ce1)
+				 || !zend_jit_ugl_classify(opline, 1, rec->op2_type, ce2, env_var, env_ce, nenv, &used2, &kind2, &st2, &v2)
+				 || (v2 && v2 != ce1)) {
+					return false;
+				}
+				if (used2 >= 0) {
+					nenv--;
+				}
+				if (nenv != 0) {
+					return false;
+				}
+				steps[k].kind[1] = kind2;
+				steps[k].stype[1] = st2;
+				*n_out = k + 1;
+				*ce_out = ce1;
+				return true;
+			default:
+				return false;
+		}
+		rec = next;
+	}
+	return false;
+}
 #endif
+
 
 #define CHECK_OP1_TRACE_TYPE() \
 	CHECK_OP_TRACE_TYPE(opline->op1.var, ssa_op->op1_use, op1_info, op1_type)
@@ -4398,8 +4565,14 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 	}
 
 	ssa_op = (JIT_G(opt_level) >= ZEND_JIT_LEVEL_INLINE) ? ssa->ops : NULL;
+#ifdef ZEND_UGL
+	uint32_t ugl_skip = 0; /* opcodes still to go of a run compiled at its first opcode */
+#endif
 	for (;;p++) {
 		if (p->op == ZEND_JIT_TRACE_VM) {
+#ifdef ZEND_UGL
+			zend_jit_trace_rec *vm_p = p;
+#endif
 			uint8_t op1_type = p->op1_type;
 			uint8_t op2_type = p->op2_type;
 			uint8_t op3_type = p->op3_type;
@@ -4437,6 +4610,15 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 				val_type = (p+1)->op1_type;
 				p++;
 			}
+
+#ifdef ZEND_UGL
+			if (ugl_skip) {
+				/* Already compiled with the first opcode of its run. */
+				ugl_skip--;
+				gen_handler = 1;
+				goto done;
+			}
+#endif
 
 			frame_flags = 0;
 
@@ -4552,22 +4734,19 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 					case ZEND_MUL:
 					case ZEND_DIV:
 #ifdef ZEND_UGL
-						/* $r = $a <op> $b on vectors (see zend_jit_ugl_vec_binary) */
-						if (ZEND_JIT_UGL_VEC_OPERANDS(opline, ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type))
-						 && (opline->op1_type == IS_CV || opline->op1_type == IS_CONST)
-						 && (opline->op2_type == IS_CV || opline->op2_type == IS_CONST)
-						 && opline->result_type == IS_TMP_VAR
-						 && (opline + 1)->opcode == ZEND_ASSIGN
-						 && (opline + 1)->op1_type == IS_CV
-						 && (opline + 1)->op2_type == IS_TMP_VAR
-						 && (opline + 1)->op2.var == opline->result.var) {
-							gen_handler = 1;
-							if (!zend_jit_ugl_vec_binary(&ctx, op_array, opline,
-									ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type),
-									zend_may_throw(opline, ssa_op, op_array, ssa), p + 1)) {
-								goto jit_failure;
+						{
+							zend_jit_ugl_step steps[ZEND_JIT_UGL_MAX_CHAIN];
+							int n;
+							zend_class_entry *vce;
+
+							if (zend_jit_ugl_scan_chain(vm_p, steps, &n, &vce)) {
+								gen_handler = 1;
+								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+									goto jit_failure;
+								}
+								ugl_skip = n - 1;
+								goto done;
 							}
-							goto done;
 						}
 #endif
 						if (opline->opcode == ZEND_DIV) {
@@ -4714,19 +4893,19 @@ static zend_vm_opcode_handler_t zend_jit_trace(zend_jit_trace_rec *trace_buffer,
 							break;
 						}
 #ifdef ZEND_UGL
-						/* $a op= $b on vectors (see zend_jit_ugl_vec_binary) */
-						if (ZEND_JIT_UGL_VEC_OPERANDS(opline, ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type))
-						 && op1_type == IS_OBJECT
-						 && (opline->op2_type == IS_CV || opline->op2_type == IS_CONST)
-						 && (opline->extended_value == ZEND_ADD || opline->extended_value == ZEND_SUB
-						  || opline->extended_value == ZEND_MUL || opline->extended_value == ZEND_DIV)) {
-							gen_handler = 1;
-							if (!zend_jit_ugl_vec_binary(&ctx, op_array, opline,
-									ZEND_JIT_UGL_OP_TYPE(opline, 1, op1_type), ZEND_JIT_UGL_OP_TYPE(opline, 2, op2_type),
-									zend_may_throw(opline, ssa_op, op_array, ssa), p + 1)) {
-								goto jit_failure;
+						{
+							zend_jit_ugl_step steps[ZEND_JIT_UGL_MAX_CHAIN];
+							int n;
+							zend_class_entry *vce;
+
+							if (zend_jit_ugl_scan_chain(vm_p, steps, &n, &vce)) {
+								gen_handler = 1;
+								if (!zend_jit_ugl_vec_chain(&ctx, op_array, steps, n, vce)) {
+									goto jit_failure;
+								}
+								ugl_skip = n - 1;
+								goto done;
 							}
-							goto done;
 						}
 #endif
 						op1_info = OP1_INFO();

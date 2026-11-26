@@ -791,4 +791,20 @@ static zend_always_inline bool is_signed(double d)
 	return (((unsigned char*)&d)[sizeof(double)-1] & 0x80) != 0;
 }
 
+#ifdef ZEND_UGL
+/* One opcode of a run of vector arithmetic compiled as a unit (zend_jit_ugl_vec_chain). */
+# define ZEND_JIT_UGL_MAX_CHAIN 6
+# define ZEND_JIT_UGL_NONE       0
+# define ZEND_JIT_UGL_VEC_CV     1
+# define ZEND_JIT_UGL_SCALAR_CV  2
+# define ZEND_JIT_UGL_CONST      3
+# define ZEND_JIT_UGL_TMP        4
+typedef struct _zend_jit_ugl_step {
+	const zend_op   *opline;
+	zend_jit_trace_rec *rec;      /* its ZEND_JIT_TRACE_VM record */
+	uint8_t          kind[2];     /* ZEND_JIT_UGL_* of op1 and op2 */
+	uint8_t          stype[2];    /* recorded zval type of a scalar variable */
+} zend_jit_ugl_step;
+#endif
+
 #endif /* ZEND_JIT_INTERNAL_H */

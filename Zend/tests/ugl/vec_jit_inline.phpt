@@ -97,6 +97,44 @@ function scalars(): array {
     return [md5(implode('', $out)), bits($a4)];
 }
 echo implode(' ', scalars()), "\n";
+
+// Runs of operations: the intermediate vectors stay in registers, the result must not change.
+function chains(): array {
+    $out = [];
+    $p = vec3(0, 0, 0); $v = vec3(1, 2, 3); $w = vec3(-0.5, 0.25, 8); $q = vec3(0, 0, 0);
+    $p4 = vec4(1, 1, 1, 1); $v4 = vec4(0.1, 0.2, 0.3, 0.4); $q4 = vec4(0, 0, 0, 0);
+    $keep = null;
+    for ($i = 0; $i < 150; $i++) {
+        $p = $p + $v * 0.016;                    // MUL, ADD, ASSIGN
+        $q = ($p + $v) * ($w - $v) / 3;          // two temporaries meet
+        $p += $w * 0.5 + $v;                     // longer run into ASSIGN_OP
+        $q = $q - 2 * $w;                        // scalar on the left
+        $p4 = $p4 * 0.5 + $v4 * $v4;
+        $q4 = $p4 / ($v4 + 1.0);
+        if ($i === 100) { $keep = $p; }          // $p shared from here on: runs must not touch it
+        $o = bits($p) . bits($q) . bits($p4) . bits($q4);
+        $out[] = $o;
+    }
+    return [md5(implode('', $out)), bits($p), bits($keep)];
+}
+echo implode(' ', chains()), "\n";
+
+// A run with a failing step: the class of an operand changes while the trace is hot.
+function broken(): string {
+    $r = [];
+    $a = vec3(1, 2, 3); $b = vec3(1, 1, 1); $c = vec2(1, 1); $t = vec3(0, 0, 0);
+    for ($i = 0; $i < 60; $i++) {
+        $o = $i < 50 ? $b : $c;
+        try {
+            $t = $a + $o * 2.0;
+            $r[] = get_debug_type($t);
+        } catch (Throwable $e) {
+            $r[] = get_class($e);
+        }
+    }
+    return implode(',', array_count_values($r) ? array_map(fn($k, $n) => "$k=$n", array_keys(array_count_values($r)), array_count_values($r)) : []);
+}
+echo broken(), "\n";
 ?>
 --EXPECT--
 bool(true)
@@ -115,3 +153,5 @@ array(2) {
 }
 float(3)
 7841ad64461617747e73a0a3d4ef1348 e4388e3fe4388e3fe4388e3fe4388e3f
+8111e6a4e1a6d08f448059b3b6277c63 becce5426dc6a14358268444 5dbb9a425bdb59433df63144
+vec3=50,TypeError=10
