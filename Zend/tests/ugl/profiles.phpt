@@ -95,7 +95,7 @@ foreach ($cases as [$profile, $name, $code]) {
     foreach ($out as $line) {
         if (str_contains($line, 'Fatal error')) { $first = $line; break; }
     }
-    $msg = $first === '' ? 'ok' : preg_replace('~ in /.* on line (\d+)$~', ' (line $1)', preg_replace('/^.*?Fatal error: /', '', $first));
+    $msg = $first === '' ? 'ok' : preg_replace('~ in (?:[A-Za-z]:)?[\\\\/].* on line (\d+)$~', ' (line $1)', preg_replace('/^.*?Fatal error: /', '', $first));
     echo "$name [$profile]: $msg\n";
 }
 ?>

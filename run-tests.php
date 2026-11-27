@@ -2754,7 +2754,7 @@ $output
                     // proc_open does not pass empty env vars
                     continue;
                 }
-                $env_lines[] = "export $env_var=" . escapeshellarg($env_val ?? "");
+                $env_lines[] = "export $env_var=" . escapeshellarg((string) ($env_val ?? ""));
             }
             $exported_environment = "\n" . implode("\n", $env_lines) . "\n";
             $sh_script = <<<SH
