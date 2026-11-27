@@ -34,6 +34,7 @@ jobs:
           - { name: macos-arm64-nts, os: macos-15, zts: "" }
           - { name: macos-arm64-zts, os: macos-15, zts: --enable-zts }
           - { name: macos-x86_64-nts, os: macos-15-intel, zts: "" }
+          - { name: macos-x86_64-zts, os: macos-15-intel, zts: --enable-zts }
     steps:
       - uses: actions/checkout@v6
       - name: Dependencies (Linux)
@@ -124,6 +125,23 @@ jobs:
             %%d\ugl.exe -v
             %%d\ugl.exe -r "echo UGL_VERSION, ' ', dot(vec3(1,2,3), vec3(4,5,6)), PHP_EOL;"
           )
+      - name: Stock PHP as test runner
+        uses: shivammathur/setup-php@2.40.0
+        with:
+          php-version: '8.5'
+          tools: none
+      - name: Tests (interpreter and tracing JIT)
+        shell: pwsh
+        run: |
+          $ugl = (Get-ChildItem C:\obj -Recurse -Filter ugl.exe | Select-Object -First 1).FullName
+          Write-Host "UGL binary: $ugl"
+          $env:TEST_PHP_EXECUTABLE = $ugl
+          $env:NO_INTERACTION = 1
+          $env:REPORT_EXIT_STATUS = 1
+          php run-tests.php -q --show-diff Zend/tests/ugl
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          php run-tests.php -q --show-diff Zend/tests/ugl -d opcache.enable_cli=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M -d opcache.jit_hot_loop=1 -d opcache.jit_hot_func=1 -d opcache.file_update_protection=0
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v7
         with:
           name: ugl-windows-x64-${{ matrix.zts && 'zts' || 'nts' }}
