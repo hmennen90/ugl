@@ -38,5 +38,5 @@ r7: 3,6,9
 p: 50,100,150
 v: 1,2,3
 distinct
-Unsupported operand types: vec3 + array
-Unsupported operand types: vec2 * vec3
+Unsupported operand types: Vec3 + array
+Unsupported operand types: Vec2 * Vec3

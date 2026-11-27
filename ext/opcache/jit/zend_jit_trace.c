@@ -493,10 +493,10 @@ static zend_class_entry *zend_jit_ugl_prop_ce(const zend_property_info *info)
 		return NULL;
 	}
 	name = ZEND_TYPE_NAME(t);
-	if (zend_string_equals_literal(name, "vec2")) return zend_ce_ugl_vec2;
-	if (zend_string_equals_literal(name, "vec3")) return zend_ce_ugl_vec3;
-	if (zend_string_equals_literal(name, "vec4")) return zend_ce_ugl_vec4;
-	if (zend_string_equals_literal(name, "mat4")) return zend_ce_ugl_mat4;
+	if (zend_string_equals_literal_ci(name, "Vec2")) return zend_ce_ugl_vec2;
+	if (zend_string_equals_literal_ci(name, "Vec3")) return zend_ce_ugl_vec3;
+	if (zend_string_equals_literal_ci(name, "Vec4")) return zend_ce_ugl_vec4;
+	if (zend_string_equals_literal_ci(name, "Mat4")) return zend_ce_ugl_mat4;
 	return NULL;
 }
 

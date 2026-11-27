@@ -1204,13 +1204,6 @@ static zend_string *zend_resolve_class_name(zend_string *name, uint32_t type) /*
 		}
 	}
 
-#ifdef ZEND_UGL
-	/* vec2 and vec3 are global classes that need no import. */
-	if (zend_is_ugl_class_name(name)) {
-		return zend_string_copy(name);
-	}
-#endif
-
 	/* If not fully qualified and not an alias, prepend the current namespace */
 	return zend_prefix_with_ns(name);
 }

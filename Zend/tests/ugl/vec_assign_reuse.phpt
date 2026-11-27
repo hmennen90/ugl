@@ -25,7 +25,7 @@ float(1)
 float(4)
 float(6)
 11 22 1
-vec4 44
+Vec4 44
 bool(true)
 1 2
 11

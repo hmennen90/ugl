@@ -4,7 +4,7 @@ vec2 and vec3: operators, swizzling, immutability, type names, int32
 <?php if (!function_exists('vec3')) die('skip UGL build required'); ?>
 --FILE--
 <?php
-namespace Game;
+namespace Game; use Vec2, Vec3, Vec4, Mat4;
 function len(vec3 $v): float32 { return $v->length(); }
 function t($f) { try { var_dump($f()); } catch (\Throwable $e) { echo get_class($e), ": ", $e->getMessage(), "\n"; } }
 $a = vec3(1, 2, 3); $b = vec3(0.5, 0.25, 2);
@@ -52,7 +52,7 @@ interface A { function m(): float; function n(float32 $x); function o(): int; fu
 class B implements A { function m(): float32 { return 1.0; } function n(float $x) {} function o(): int32 { return 1; } function p(int32|int $x) {} }
 echo "variance ok\n";
 --EXPECTF--
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(1)
   ["y"]=>
@@ -60,7 +60,7 @@ object(vec3)#%d (3) {
   ["z"]=>
   float(3)
 }
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(1.5)
   ["y"]=>
@@ -68,7 +68,7 @@ object(vec3)#%d (3) {
   ["z"]=>
   float(5)
 }
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(2)
   ["y"]=>
@@ -76,7 +76,7 @@ object(vec3)#%d (3) {
   ["z"]=>
   float(6)
 }
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(2)
   ["y"]=>
@@ -84,7 +84,7 @@ object(vec3)#%d (3) {
   ["z"]=>
   float(6)
 }
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(2)
   ["y"]=>
@@ -92,7 +92,7 @@ object(vec3)#%d (3) {
   ["z"]=>
   float(1.5)
 }
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(0)
   ["y"]=>
@@ -100,7 +100,7 @@ object(vec3)#%d (3) {
   ["z"]=>
   float(2)
 }
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(-1)
   ["y"]=>
@@ -112,7 +112,7 @@ bool(true)
 bool(false)
 bool(true)
 float(1)
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(3)
   ["y"]=>
@@ -120,18 +120,18 @@ object(vec3)#%d (3) {
   ["z"]=>
   float(1)
 }
-object(vec2)#%d (2) {
+object(Vec2)#%d (2) {
   ["x"]=>
   float(1)
   ["y"]=>
   float(2)
 }
 
-Warning: Undefined property: vec3::$w in %s on line 19
+Warning: Undefined property: Vec3::$w in %s on line 19
 NULL
 bool(true)
 float(7)
-object(vec3)#%d (3) {
+object(Vec3)#%d (3) {
   ["x"]=>
   float(3.25)
   ["y"]=>
@@ -140,12 +140,12 @@ object(vec3)#%d (3) {
   float(-0.75)
 }
 float(3.7416574954986572)
-TypeError: Game\len(): Argument #%d ($v) must be of type vec3, vec2 given, called in %s on line 24
-Error: Cannot modify vec3: values are immutable
-TypeError: Unsupported operand types: vec3 + vec2
-TypeError: Unsupported operand types: vec3 % int
-TypeError: Unsupported operand types: vec3 + string
-object(vec2)#%d (2) {
+TypeError: Game\len(): Argument #%d ($v) must be of type Vec3, Vec2 given, called in %s on line 24
+Error: Cannot modify Vec3: values are immutable
+TypeError: Unsupported operand types: Vec3 + Vec2
+TypeError: Unsupported operand types: Vec3 % int
+TypeError: Unsupported operand types: Vec3 + string
+object(Vec2)#%d (2) {
   ["x"]=>
   float(3)
   ["y"]=>
@@ -159,7 +159,7 @@ array(2) {
   ["y"]=>
   float(2)
 }
-Error: Trying to clone an uncloneable object of class vec3
+Error: Trying to clone an uncloneable object of class Vec3
 bool(true)
 float(2)
 float(2)

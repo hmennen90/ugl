@@ -290,9 +290,9 @@ echo typeSwitch(), "\n";
 bool(true)
 2dceb9f89d2da406388ef80468d1a4e2 87190d4374e680c3b5e9f744 0033333f0066a6bf80661e41 54660c430e4080c3e8acf644
 array(2) {
-  ["vec3"]=>
+  ["Vec3"]=>
   int(41)
-  ["vec2"]=>
+  ["Vec2"]=>
   int(1)
 }
 array(2) {
@@ -304,13 +304,13 @@ array(2) {
 float(3)
 7841ad64461617747e73a0a3d4ef1348 e4388e3fe4388e3fe4388e3fe4388e3f
 8111e6a4e1a6d08f448059b3b6277c63 becce5426dc6a14358268444 5dbb9a425bdb59433df63144
-vec3=50,TypeError=10
+Vec3=50,TypeError=10
 8375eada230b13ec3f66092597502f2c
 75f335b9ace51f71bf382c361d3edd5d
 e6ff19b1df3b7c5ffd2989db3fb85f2a
 ok|vec2(): Argument #2 ($y) must be of type float, null given|vec3(): Argument #1 ($x) must be of type float, string given
 5b5f683d74b1690551affafcf5ec8ac6
-6|dot() expects exactly 2 arguments, 1 given|dot(): Argument #2 ($b) must be of type vec3, vec2 given
+6|dot() expects exactly 2 arguments, 1 given|dot(): Argument #2 ($b) must be of type Vec3, Vec2 given
 6648b6de13094cfd78415daa4ea109bb 239.8 252.50399867418
 944eae0f5e9237aa602144ffe6be3df2
 ok|vec4(): Argument #4 ($w) must be of type float, array given|vec4(): Argument #4 ($w) must be of type float, string given

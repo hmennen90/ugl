@@ -385,7 +385,7 @@ static void ugl_check_new(ugl_ctx *c, zend_ast *ast)
 	zend_string_release(low);
 	zend_string_release(short_name);
 	if (!ok) {
-		ugl_fail(c, ast, "Heap objects (new of anything but a final readonly class of this file, vec2/vec3/vec4/mat4) are");
+		ugl_fail(c, ast, "Heap objects (new of anything but a final readonly class of this file, Vec2/Vec3/Vec4/Mat4) are");
 	}
 }
 

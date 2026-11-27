@@ -634,7 +634,7 @@ static ZEND_NAMED_FUNCTION(ugl_fn_dot)
 		Z_PARAM_OBJ(b)
 	ZEND_PARSE_PARAMETERS_END();
 	if (a->handlers != &ugl_vec_handlers) {
-		zend_argument_type_error(1, "must be of type vec2|vec3|vec4, %s given", ZSTR_VAL(a->ce->name));
+		zend_argument_type_error(1, "must be of type Vec2|Vec3|Vec4, %s given", ZSTR_VAL(a->ce->name));
 		RETURN_THROWS();
 	}
 	if (b->ce != a->ce) {
@@ -821,7 +821,7 @@ static ZEND_NAMED_FUNCTION(ugl_mat_construct)
 		RETURN_THROWS();
 	}
 	if (mat->initialized) {
-		zend_throw_error(NULL, "Cannot modify mat4: values are immutable");
+		zend_throw_error(NULL, "Cannot modify Mat4: values are immutable");
 		RETURN_THROWS();
 	}
 	memcpy(mat->m, m, sizeof(m));
@@ -965,7 +965,7 @@ static zend_array *ugl_mat_get_properties_for(zend_object *obj, zend_prop_purpos
 
 static zval *ugl_mat_write_property(zend_object *obj, zend_string *name, zval *value, void **cache_slot)
 {
-	zend_throw_error(NULL, "Cannot modify mat4: values are immutable");
+	zend_throw_error(NULL, "Cannot modify Mat4: values are immutable");
 	return &EG(error_zval);
 }
 
@@ -1064,7 +1064,7 @@ static ZEND_NAMED_FUNCTION(ugl_mat_inverse_method)
 
 	ZEND_PARSE_PARAMETERS_NONE();
 	if (ugl_mat_inverse(mat->m, inv) == 0.0f) {
-		zend_throw_exception(zend_ce_value_error, "mat4 is not invertible", 0);
+		zend_throw_exception(zend_ce_value_error, "Mat4 is not invertible", 0);
 		RETURN_THROWS();
 	}
 	ugl_mat_new(return_value, inv);
@@ -1090,25 +1090,25 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_vec4_ctor, 0, 0, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, w, IS_DOUBLE, 0, "0.0")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_vec2, 0, 0, vec2, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_vec2, 0, 0, Vec2, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, x, IS_DOUBLE, 0, "0.0")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, y, IS_DOUBLE, 0, "0.0")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_vec3, 0, 0, vec3, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_vec3, 0, 0, Vec3, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, x, IS_DOUBLE, 0, "0.0")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, y, IS_DOUBLE, 0, "0.0")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, z, IS_DOUBLE, 0, "0.0")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_vec4, 0, 0, vec4, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_vec4, 0, 0, Vec4, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, x, IS_DOUBLE, 0, "0.0")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, y, IS_DOUBLE, 0, "0.0")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, z, IS_DOUBLE, 0, "0.0")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, w, IS_DOUBLE, 0, "0.0")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_mat4, 0, 0, mat4, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_fn_mat4, 0, 0, Mat4, 0)
 	ZEND_ARG_VARIADIC_TYPE_INFO(0, values, IS_DOUBLE, 0)
 ZEND_END_ARG_INFO()
 
@@ -1117,31 +1117,31 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_mat4_ctor, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_vec2_dot, 0, 1, IS_DOUBLE, 0)
-	ZEND_ARG_OBJ_INFO(0, other, vec2, 0)
+	ZEND_ARG_OBJ_INFO(0, other, Vec2, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_vec3_dot, 0, 1, IS_DOUBLE, 0)
-	ZEND_ARG_OBJ_INFO(0, other, vec3, 0)
+	ZEND_ARG_OBJ_INFO(0, other, Vec3, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_vec4_dot, 0, 1, IS_DOUBLE, 0)
-	ZEND_ARG_OBJ_INFO(0, other, vec4, 0)
+	ZEND_ARG_OBJ_INFO(0, other, Vec4, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_vec_length, 0, 0, IS_DOUBLE, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec2_normalize, 0, 0, vec2, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec2_normalize, 0, 0, Vec2, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec3_normalize, 0, 0, vec3, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec3_normalize, 0, 0, Vec3, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec4_normalize, 0, 0, vec4, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec4_normalize, 0, 0, Vec4, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec3_cross, 0, 1, vec3, 0)
-	ZEND_ARG_OBJ_INFO(0, other, vec3, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_vec3_cross, 0, 1, Vec3, 0)
+	ZEND_ARG_OBJ_INFO(0, other, Vec3, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_mat4_get, 0, 2, IS_DOUBLE, 0)
@@ -1149,11 +1149,11 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_mat4_get, 0, 2, IS_DOUBLE, 0)
 	ZEND_ARG_TYPE_INFO(0, row, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_mat4_column, 0, 1, vec4, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_mat4_column, 0, 1, Vec4, 0)
 	ZEND_ARG_TYPE_INFO(0, column, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_mat4_self, 0, 0, mat4, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_mat4_self, 0, 0, Mat4, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_fn_dot, 0, 2, IS_DOUBLE, 0)
@@ -1227,13 +1227,12 @@ static const zend_function_entry ugl_mat4_methods[] = {
 
 ZEND_API bool zend_is_ugl_class_name(const zend_string *name)
 {
-	/* Exactly the lower-case spellings: class names are case-insensitive, so a user class
-	 * such as App\Math\Vec3 must keep resolving to itself. */
+	/* Class names are case-insensitive, so any spelling of Vec2, Vec3, Vec4 and Mat4 counts. */
 	return ZSTR_LEN(name) == 4
-		&& (memcmp(ZSTR_VAL(name), "vec2", 4) == 0
-		 || memcmp(ZSTR_VAL(name), "vec3", 4) == 0
-		 || memcmp(ZSTR_VAL(name), "vec4", 4) == 0
-		 || memcmp(ZSTR_VAL(name), "mat4", 4) == 0);
+		&& (zend_string_equals_literal_ci(name, "Vec2")
+		 || zend_string_equals_literal_ci(name, "Vec3")
+		 || zend_string_equals_literal_ci(name, "Vec4")
+		 || zend_string_equals_literal_ci(name, "Mat4"));
 }
 
 static zend_class_entry *ugl_register_class(const char *name, const zend_function_entry *methods,
@@ -1276,10 +1275,10 @@ void zend_register_ugl_vec(void)
 	zend_register_functions(NULL, ugl_functions, NULL, MODULE_PERSISTENT);
 	zend_register_string_constant("UGL_VERSION", sizeof("UGL_VERSION") - 1, UGL_PRODUCT_VERSION, CONST_PERSISTENT, 0);
 
-	zend_ce_ugl_vec2 = ugl_register_class("vec2", ugl_vec2_methods, ugl_vec2_create, &ugl_vec_handlers);
-	zend_ce_ugl_vec3 = ugl_register_class("vec3", ugl_vec3_methods, ugl_vec3_create, &ugl_vec_handlers);
-	zend_ce_ugl_vec4 = ugl_register_class("vec4", ugl_vec4_methods, ugl_vec4_create, &ugl_vec_handlers);
-	zend_ce_ugl_mat4 = ugl_register_class("mat4", ugl_mat4_methods, ugl_mat_create, &ugl_mat_handlers);
+	zend_ce_ugl_vec2 = ugl_register_class("Vec2", ugl_vec2_methods, ugl_vec2_create, &ugl_vec_handlers);
+	zend_ce_ugl_vec3 = ugl_register_class("Vec3", ugl_vec3_methods, ugl_vec3_create, &ugl_vec_handlers);
+	zend_ce_ugl_vec4 = ugl_register_class("Vec4", ugl_vec4_methods, ugl_vec4_create, &ugl_vec_handlers);
+	zend_ce_ugl_mat4 = ugl_register_class("Mat4", ugl_mat4_methods, ugl_mat_create, &ugl_mat_handlers);
 }
 
 #endif /* ZEND_UGL */

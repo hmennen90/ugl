@@ -46,10 +46,10 @@ t(fn() => again());
 ?>
 --EXPECT--
 float 32
-TypeError: vec3::dot(): Argument #1 ($other) must be of type vec3, vec2 given
-TypeError: vec3::dot(): Argument #1 ($other) must be of type vec3, int given
-ArgumentCountError: vec3::dot() expects exactly 1 argument, 0 given
-ArgumentCountError: vec3::dot() expects exactly 1 argument, 2 given
+TypeError: Vec3::dot(): Argument #1 ($other) must be of type Vec3, Vec2 given
+TypeError: Vec3::dot(): Argument #1 ($other) must be of type Vec3, int given
+ArgumentCountError: Vec3::dot() expects exactly 1 argument, 0 given
+ArgumentCountError: Vec3::dot() expects exactly 1 argument, 2 given
 float 6
 float 64
 Error: Call to a member function dot() on null

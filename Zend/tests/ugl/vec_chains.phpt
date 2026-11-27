@@ -57,7 +57,7 @@ vec2: ok
 vec4: ok
 TE dim
 TE array
-TE undef: Unsupported operand types: vec3 + null
+TE undef: Unsupported operand types: Vec3 + null
 ref: ok
 p: ok
 keep: ok

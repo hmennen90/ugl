@@ -1,8 +1,8 @@
 # UGL
 
 UGL is the runtime for the Unified Game Language. It is built from the sources of the PHP
-language and the Zend Engine, adds game types (`float32`, `int32`, `vec2`, `vec3`, `vec4`,
-`mat4`), file profiles (`declare(kind=…)`) and always compiles with strict types.
+language and the Zend Engine, adds game types (`float32`, `int32`, `Vec2`, `Vec3`, `Vec4`,
+`Mat4`), file profiles (`declare(kind=…)`) and always compiles with strict types.
 
 ## Name
 
@@ -63,12 +63,13 @@ keeps the line numbers (the tools in `ugl-tools` do this). Composer's PSR-4 load
 ## What differs from the base language
 
 - `strict_types` is always on; `declare(strict_types=0)` is a compile error.
-- `float32`, `int32`, `vec2`, `vec3`, `vec4`, `mat4` are reserved names. `vec2`, `vec3`, `vec4` and
-  `mat4` mean the built-in types only in exactly this lower-case spelling, so a user class
-  `App\Math\Vec3` keeps working (class names are case-insensitive otherwise).
+- `float32` and `int32` are reserved type names. `Vec2`, `Vec3`, `Vec4` and `Mat4` are ordinary global
+  classes (final, immutable); inside a namespace write `\Vec3` or `use Vec3;`, so a user class
+  `App\Math\Vec3` keeps working. The constructor functions `vec2()`, `vec3()`, `vec4()`, `mat4()` and
+  `dot()` are lower-case functions.
 - `declare(kind='logic'|'common'|'data'|'shader')` restricts a file (`Zend/zend_ugl_profile.c`).
 - `*` no longer swaps its operands for some operand type combinations, so that
-  `mat4 * vec4` and `vec4 * mat4` differ. Error messages of `*` name the operands in source order.
+  `Mat4 * Vec4` and `Vec4 * Mat4` differ. Error messages of `*` name the operands in source order.
 - Extensions must be rebuilt: `zend_type.type_mask` is 64 bits wide. The module API number is
   different from the base language on purpose.
 

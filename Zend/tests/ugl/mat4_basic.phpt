@@ -68,14 +68,14 @@ bool(true)
 bool(false)
 ArgumentCountError: mat4() expects 0 or 16 arguments, 3 given
 TypeError: mat4(): Argument #%d must be of type float, string given
-ValueError: mat4 is not invertible
-ValueError: mat4::get(): Argument #%d ($column) must be between 0 and 3
-ValueError: mat4::column(): Argument #%d ($column) must be between 0 and 3
-TypeError: Unsupported operand types: mat4 * vec3
-TypeError: Unsupported operand types: mat4 / mat4
-TypeError: Unsupported operand types: mat4 * string
-Error: Cannot modify mat4: values are immutable
-Error: Trying to clone an uncloneable object of class mat4
+ValueError: Mat4 is not invertible
+ValueError: Mat4::get(): Argument #%d ($column) must be between 0 and 3
+ValueError: Mat4::column(): Argument #%d ($column) must be between 0 and 3
+TypeError: Unsupported operand types: Mat4 * Vec3
+TypeError: Unsupported operand types: Mat4 / Mat4
+TypeError: Unsupported operand types: Mat4 * string
+Error: Cannot modify Mat4: values are immutable
+Error: Trying to clone an uncloneable object of class Mat4
 float(4)
 float(4)
 float(4)
@@ -96,4 +96,4 @@ array(4) {
 }
 bool(true)
 bool(true)
-mat4 vec4
+Mat4 Vec4
