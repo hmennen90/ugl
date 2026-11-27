@@ -2936,7 +2936,7 @@ function generate_diff(string $wanted, ?string $wanted_re, string $output): stri
             return $expected === $new;
         }
         $regex = '/^' . expectf_to_regex((string) $expected) . '$/s';
-        return preg_match($regex, $new);
+        return preg_match($regex, (string) $new) === 1;
     });
     return $differ->diff($w, $o);
 }
