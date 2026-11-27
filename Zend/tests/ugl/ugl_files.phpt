@@ -10,7 +10,7 @@ function run(string $args): void {
     exec(escapeshellarg(PHP_BINARY) . ' -n ' . $args . ' 2>&1', $out);
     foreach ($out as $line) {
         if ($line !== '' && !str_starts_with($line, 'Stack trace') && !str_starts_with($line, '#0')) {
-            echo str_replace(__DIR__, '%s', preg_replace('~^(PHP )?(Fatal error: .*) in (/\S*/)?(\S+) on line (\d+)$~', '$2 in $4 on line $5', $line)), "\n";
+            echo str_replace(__DIR__, '%s', preg_replace('~^(PHP )?(Fatal error: .*) in ((?:[A-Za-z]:)?[\\\\/]\S*[\\\\/])?(\S+) on line (\d+)$~', '$2 in $4 on line $5', $line)), "\n";
         }
     }
 }

@@ -28,7 +28,7 @@ foreach (['declare(strict_types=1); echo "one\n";', 'declare(strict_types=0); ec
     unlink($file);
     foreach ($out as $line) {
         if ($line !== '' && !str_starts_with($line, 'Stack trace') && !str_starts_with($line, '#0')) {
-            echo preg_replace('~ in /.* on line (\d+)$~', ' (line $1)', $line), "\n";
+            echo preg_replace('~ in (?:[A-Za-z]:)?[\\\\/].* on line (\d+)$~', ' (line $1)', $line), "\n";
         }
     }
 }
